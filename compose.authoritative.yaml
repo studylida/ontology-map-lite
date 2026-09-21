@@ -1,0 +1,4 @@
+volumes:
+  ontology-map-postgres:
+    external: true
+    name: ontology-map-postgres

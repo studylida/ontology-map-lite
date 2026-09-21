@@ -1,0 +1,96 @@
+name: Ontology Reference Data
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/ontology-reference-data.yml"
+      - "compose.yaml"
+      - "docs/**"
+      - "scripts/check_docs.py"
+      - "server/alembic.ini"
+      - "server/migrations/**"
+      - "server/src/ontology_map/db/ontology_reference_data.py"
+      - "server/src/ontology_map/db/topic_reference_schema.py"
+      - "server/src/ontology_map/db/topic_references.py"
+      - "server/src/ontology_map/db/schema.py"
+      - "server/tests/test_ontology_reference_data_postgres.py"
+
+permissions:
+  contents: read
+
+jobs:
+  activation:
+    name: Approved ontology activation · PostgreSQL
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      COMPOSE_PROJECT_NAME: issue201-reference-${{ github.run_id }}-${{ github.run_attempt }}
+      POSTGRES_DB: ontology_map_approved_reference_test
+      POSTGRES_USER: issue201_reference
+      POSTGRES_PORT: "127.0.0.1:55437"
+      ONTOLOGY_MAP_ENVIRONMENT: development
+      ONTOLOGY_MAP_ONTOLOGY_REFERENCE_TEST: "1"
+      PYTHONPATH: ${{ github.workspace }}/server/src
+    steps:
+      - name: 저장소 받기
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: uv 준비
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.12.7"
+          enable-cache: true
+      - name: 고정 Python 환경 준비
+        run: |
+          uv sync --project server --frozen
+          uv run --project server --frozen python --version
+          uv run --project server --frozen pytest --version
+          uv run --project server --frozen ruff --version
+          uv run --project server --frozen mypy --version
+      - name: Backend 정적 검사
+        run: |
+          uv run --project server --frozen ruff format --check server
+          uv run --project server --frozen ruff check server
+          uv run --project server --frozen mypy --config-file server/pyproject.toml server/src/ontology_map
+      - name: 격리 DB credential 준비
+        run: |
+          password="$(openssl rand -hex 24)"
+          echo "::add-mask::$password"
+          url="postgresql+psycopg://${POSTGRES_USER}:${password}@127.0.0.1:55437/${POSTGRES_DB}"
+          echo "::add-mask::$url"
+          {
+            echo "POSTGRES_PASSWORD=$password"
+            echo "ONTOLOGY_MAP_DATABASE_URL=$url"
+          } >> "$GITHUB_ENV"
+      - name: Reference activation 전용 PostgreSQL 시작
+        run: |
+          docker compose up --wait --wait-timeout 120 db
+          docker compose exec -T db psql \
+            -U "$POSTGRES_USER" \
+            -d "$POSTGRES_DB" \
+            -c 'SELECT version(), current_database();'
+      - name: Clean migration 적용
+        working-directory: server
+        run: |
+          uv run --frozen alembic upgrade head
+          uv run --frozen alembic current
+      - name: Reference activation PostgreSQL 검증
+        run: |
+          uv run --project server --frozen pytest -q \
+            server/tests/test_ontology_reference_data_postgres.py
+      - name: 명시적 activation 명령 재실행
+        run: |
+          uv run --project server --frozen python -m ontology_map.db.ontology_reference_data
+          uv run --project server --frozen python -m ontology_map.db.ontology_reference_data
+      - name: Migration · metadata · docs 정합성
+        working-directory: server
+        run: |
+          uv run --frozen alembic check
+          cd ..
+          uv run --project server --frozen python scripts/check_docs.py --check
+          git diff --check
+      - name: 이번 run의 격리 DB 정리
+        if: ${{ always() }}
+        run: docker compose down --volumes

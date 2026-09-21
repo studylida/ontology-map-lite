@@ -1,0 +1,95 @@
+name: Knowledge Extraction
+
+on:
+  push:
+    branches: ["feat/127-role-harness"]
+  pull_request:
+    paths:
+      - ".github/workflows/knowledge-extraction.yml"
+      - "server/**"
+      - "compose.yaml"
+      - "scripts/check_docs.py"
+      - "docs/**"
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      COMPOSE_PROJECT_NAME: ke127-${{ github.run_id }}-${{ github.run_attempt }}
+      POSTGRES_DB: ontology_map_ke127_test
+      POSTGRES_USER: ke127_test
+      POSTGRES_PORT: "127.0.0.1:55433"
+      ONTOLOGY_MAP_ENVIRONMENT: development
+      PYTHONPATH: ${{ github.workspace }}/server/src
+    steps:
+      - name: 검증 대상 받기
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: 고정 uv 준비
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+        with:
+          version: "0.12.7"
+          enable-cache: true
+      - name: 검증 환경과 source snapshot
+        run: |
+          git rev-parse HEAD
+          git log -1 --format=%P
+          git archive --format=tar.gz --output="$RUNNER_TEMP/ke127-source.tar.gz" HEAD
+          uv sync --project server --frozen
+          uv run --project server --frozen python --version
+      - name: Ruff와 format
+        run: |
+          uv run --project server --frozen ruff check server
+          uv run --project server --frozen ruff format --check server
+      - name: 타입 검사
+        run: |
+          uv run --project server --frozen mypy --config-file server/pyproject.toml server/src/ontology_map
+          (cd server && uv run --frozen mypy src)
+      - name: 일회성 DB credential 준비
+        run: |
+          password="$(openssl rand -hex 24)"
+          echo "::add-mask::$password"
+          url="postgresql+psycopg://${POSTGRES_USER}:${password}@127.0.0.1:55433/${POSTGRES_DB}"
+          er_url="postgresql+psycopg://${POSTGRES_USER}:${password}@127.0.0.1:55433/ontology_map_er128_test"
+          echo "::add-mask::$url"
+          echo "::add-mask::$er_url"
+          {
+            echo "POSTGRES_PASSWORD=$password"
+            echo "ONTOLOGY_MAP_DATABASE_URL=$url"
+            echo "ONTOLOGY_MAP_KE_TEST_DATABASE_URL=$url"
+            echo "ONTOLOGY_MAP_ER_TEST_DATABASE_URL=$er_url"
+          } >> "$GITHUB_ENV"
+      - name: 격리 PostgreSQL과 기존 migration
+        run: |
+          docker compose up --wait --wait-timeout 120 db
+          docker compose exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c 'SELECT version(), current_database();'
+          docker compose exec -T db createdb -U "$POSTGRES_USER" ontology_map_er128_test
+          (cd server && uv run --frozen alembic upgrade head && uv run --frozen alembic current)
+          (cd server && ONTOLOGY_MAP_DATABASE_URL="$ONTOLOGY_MAP_ER_TEST_DATABASE_URL" uv run --frozen alembic upgrade head)
+      - name: 전체 backend 및 실제 PostgreSQL 회귀
+        run: uv run --project server --frozen pytest -q -ra server/tests --junitxml="$RUNNER_TEMP/ke127-tests.xml"
+      - name: metadata와 문서 일치
+        run: |
+          (cd server && uv run --frozen alembic check)
+          uv run --project server --frozen python scripts/check_docs.py --check
+          git diff --check
+          git diff --exit-code -- server/pyproject.toml server/uv.lock
+      - name: 검증 재현 자료
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ke127-verification-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/ke127-source.tar.gz
+            ${{ runner.temp }}/ke127-tests.xml
+          retention-days: 7
+          if-no-files-found: error
+      - name: 이번 run의 DB 정리
+        if: ${{ always() }}
+        run: docker compose down --volumes

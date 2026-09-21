@@ -1,0 +1,79 @@
+:root {
+  color-scheme: dark;
+  font-family:
+    system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #f3f6fa;
+  background: #0b0f14;
+  font-synthesis: none;
+  --background: #0b0f14;
+  --surface: #121821;
+  --surface-elevated: #18212c;
+  --border: #2b3645;
+  --text-primary: #f3f6fa;
+  --text-secondary: #9ca8b7;
+  --text-muted: #6f7c8e;
+  --interactive: #72a7ff;
+  --focus-ring: #b9d3ff;
+  --relation: #7b8797;
+  --conflict: #e6a23c;
+  --ready: #4fd1a1;
+  --node-person: #f5a24b;
+  --node-company: #b792f4;
+  --node-technology: #43c6d9;
+  --node-topic: #65c98b;
+  --node-event: #f17c9e;
+  --font-technical:
+    400 12px / 1.4 ui-monospace, "SFMono-Regular", Consolas, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  min-width: 44px;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+::selection {
+  color: var(--background);
+  background: var(--focus-ring);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --background: #f5f7fa;
+  --surface: #ffffff;
+  --surface-elevated: #edf1f6;
+  --border: #c8d1dc;
+  --text-primary: #172331;
+  --text-secondary: #45556a;
+  --text-muted: #58687b;
+  --interactive: #245ac1;
+  --focus-ring: #245ac1;
+  --relation: #657180;
+  --conflict: #b52c42;
+  --theme-surface: #ffffff;
+  --theme-selected: #e1ebfc;
+  --theme-loading: #f5f7fa;
+}

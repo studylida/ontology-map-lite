@@ -1,0 +1,139 @@
+name: Topic Reference
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/topic-reference.yml"
+      - "compose.yaml"
+      - "docs/**"
+      - "scripts/check_docs.py"
+      - "server/alembic.ini"
+      - "server/migrations/**"
+      - "server/src/ontology_map/**"
+      - "server/tests/**"
+
+permissions:
+  contents: read
+
+jobs:
+  lifecycle:
+    name: Topic reference lifecycle · PostgreSQL
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      COMPOSE_PROJECT_NAME: issue203-lifecycle-${{ github.run_id }}-${{ github.run_attempt }}
+      POSTGRES_DB: ontology_map_topic_reference_test
+      POSTGRES_USER: issue203_topic
+      POSTGRES_PORT: "127.0.0.1:55435"
+      ONTOLOGY_MAP_ENVIRONMENT: development
+      ONTOLOGY_MAP_TOPIC_REFERENCE_TEST: "1"
+      PYTHONPATH: ${{ github.workspace }}/server/src
+    steps:
+      - name: 저장소 받기
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: uv 준비
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.12.7"
+          enable-cache: true
+      - name: 고정 Python 환경 준비
+        run: |
+          uv sync --project server --frozen
+          uv run --project server --frozen python --version
+          uv run --project server --frozen pytest --version
+          uv run --project server --frozen ruff --version
+          uv run --project server --frozen mypy --version
+      - name: Backend 정적 검사
+        run: |
+          uv run --project server --frozen ruff format --check server
+          uv run --project server --frozen ruff check server
+          uv run --project server --frozen mypy --config-file server/pyproject.toml server/src/ontology_map
+      - name: 격리 DB credential 준비
+        run: |
+          password="$(openssl rand -hex 24)"
+          echo "::add-mask::$password"
+          url="postgresql+psycopg://${POSTGRES_USER}:${password}@127.0.0.1:55435/${POSTGRES_DB}"
+          echo "::add-mask::$url"
+          {
+            echo "POSTGRES_PASSWORD=$password"
+            echo "ONTOLOGY_MAP_DATABASE_URL=$url"
+          } >> "$GITHUB_ENV"
+      - name: Topic reference 전용 PostgreSQL 시작
+        run: |
+          docker compose up --wait --wait-timeout 120 db
+          docker compose exec -T db psql \
+            -U "$POSTGRES_USER" \
+            -d "$POSTGRES_DB" \
+            -c 'SELECT version(), current_database();'
+      - name: Clean migration 적용
+        working-directory: server
+        run: |
+          uv run --frozen alembic upgrade head
+          uv run --frozen alembic current
+      - name: 전체 backend 회귀와 Topic lifecycle 검증
+        run: uv run --project server --frozen pytest -q server/tests
+      - name: Migration · metadata · docs 정합성
+        working-directory: server
+        run: |
+          uv run --frozen alembic check
+          cd ..
+          uv run --project server --frozen python scripts/check_docs.py --check
+      - name: 이번 run의 격리 DB 정리
+        if: ${{ always() }}
+        run: docker compose down --volumes
+
+  migration-rehearsal:
+    name: Topic reference migration rehearsal · PostgreSQL
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      COMPOSE_PROJECT_NAME: issue203-migration-${{ github.run_id }}-${{ github.run_attempt }}
+      POSTGRES_DB: ontology_map_topic_reference_migration_rehearsal
+      POSTGRES_USER: issue203_migration
+      POSTGRES_PORT: "127.0.0.1:55436"
+      ONTOLOGY_MAP_ENVIRONMENT: development
+      ONTOLOGY_MAP_TOPIC_REFERENCE_MIGRATION_REHEARSAL: "1"
+      PYTHONPATH: ${{ github.workspace }}/server/src
+    steps:
+      - name: 저장소 받기
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: uv 준비
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.12.7"
+          enable-cache: true
+      - name: 고정 Python 환경 준비
+        run: |
+          uv sync --project server --frozen
+          uv run --project server --frozen python --version
+          uv run --project server --frozen pytest --version
+      - name: 격리 DB credential 준비
+        run: |
+          password="$(openssl rand -hex 24)"
+          echo "::add-mask::$password"
+          url="postgresql+psycopg://${POSTGRES_USER}:${password}@127.0.0.1:55436/${POSTGRES_DB}"
+          echo "::add-mask::$url"
+          {
+            echo "POSTGRES_PASSWORD=$password"
+            echo "ONTOLOGY_MAP_DATABASE_URL=$url"
+          } >> "$GITHUB_ENV"
+      - name: Migration rehearsal 전용 PostgreSQL 시작
+        run: |
+          docker compose up --wait --wait-timeout 120 db
+          docker compose exec -T db psql \
+            -U "$POSTGRES_USER" \
+            -d "$POSTGRES_DB" \
+            -c 'SELECT version(), current_database();'
+      - name: 0003 ↔ 0004 migration rehearsal
+        run: |
+          uv run --project server --frozen pytest -q \
+            server/tests/test_topic_reference_migration_postgres.py
+      - name: 이번 run의 rehearsal DB 정리
+        if: ${{ always() }}
+        run: docker compose down --volumes

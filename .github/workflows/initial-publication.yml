@@ -1,0 +1,138 @@
+name: Initial Publication
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/initial-publication.yml"
+      - "compose.yaml"
+      - "server/**"
+      - "scripts/check_docs.py"
+      - "docs/**"
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: "#215 PostgreSQL initial publication regression"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      COMPOSE_PROJECT_NAME: publication215-${{ github.run_id }}-${{ github.run_attempt }}
+      POSTGRES_DB: ontology_map_publication215_test
+      POSTGRES_USER: publication215_test
+      POSTGRES_PORT: "127.0.0.1:55434"
+      ONTOLOGY_MAP_ENVIRONMENT: development
+      PYTHONPATH: ${{ github.workspace }}/server/src
+    steps:
+      - name: 저장소 받기
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: uv 준비
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.12.7"
+          enable-cache: true
+      - name: 고정 환경 확인
+        run: |
+          git rev-parse HEAD
+          uv --version
+          uv sync --project server --frozen
+          uv run --project server --frozen python --version
+          uv run --project server --frozen pytest --version
+      - name: 격리 DB credential 준비
+        run: |
+          password="$(openssl rand -hex 24)"
+          echo "::add-mask::$password"
+          url="postgresql+psycopg://${POSTGRES_USER}:${password}@127.0.0.1:55434/${POSTGRES_DB}"
+          echo "::add-mask::$url"
+          {
+            echo "POSTGRES_PASSWORD=$password"
+            echo "ONTOLOGY_MAP_DATABASE_URL=$url"
+            echo "ONTOLOGY_MAP_INITIAL_PUBLICATION_TEST_DATABASE_URL=$url"
+          } >> "$GITHUB_ENV"
+      - name: PostgreSQL 18.6 격리 DB 시작
+        run: |
+          docker compose version
+          docker compose up --wait --wait-timeout 120 db
+          docker compose exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c 'SELECT version(), current_database();'
+      - name: migration head 적용
+        working-directory: server
+        run: |
+          uv run --frozen alembic upgrade head
+          uv run --frozen alembic current
+      - name: PostgreSQL Phase A 회귀
+        run: |
+          uv run --project server --frozen pytest \
+            server/tests/test_initial_publication_phase_a_postgres.py \
+            server/tests/test_initial_publication_postgres.py::test_db_only_projection_covers_new_items_and_six_provenance_kinds \
+            server/tests/test_initial_publication_postgres.py::test_evidence_only_projection_is_direct_and_start_rollback_is_atomic \
+            server/tests/test_initial_publication_postgres.py::test_concurrent_start_has_one_membership_generation \
+            server/tests/test_initial_publication_postgres.py::test_cutover_guard_blocks_legacy_not_started_until_explicit_start
+      - name: PostgreSQL Phase B 회귀
+        run: |
+          uv run --project server --frozen pytest \
+            server/tests/test_initial_publication_phase_b_alias_visibility_postgres.py \
+            server/tests/test_initial_publication_phase_b_postgres.py \
+            server/tests/test_node_context_identity_postgres.py \
+            server/tests/test_initial_publication_postgres.py::test_stale_node_context_becomes_validation_blocked \
+            server/tests/test_node_context_generation.py
+      - name: PostgreSQL Phase C 회귀
+        run: |
+          uv run --project server --frozen pytest \
+            server/tests/test_initial_publication_phase_c_postgres.py
+      - name: PostgreSQL Phase D durable 회귀
+        run: |
+          uv run --project server --frozen pytest \
+            server/tests/test_initial_publication_phase_d_postgres.py \
+            server/tests/test_initial_publication_handoff_postgres.py \
+            server/tests/test_node_context_provider.py
+      - name: current durable runner 회귀
+        run: |
+          uv run --project server --frozen pytest \
+            server/tests/test_followup_provider.py \
+            server/tests/test_followup_runner_postgres.py \
+            server/tests/test_followup_runner_blockers_postgres.py \
+            server/tests/test_insight_provider.py \
+            server/tests/test_insight_runner_postgres.py
+      - name: PostgreSQL initial publication 회귀
+        run: |
+          uv run --project server --frozen pytest \
+            server/tests/test_initial_publication_postgres.py \
+            server/tests/test_initial_publication_failure_postgres.py
+      - name: 관련 generation 회귀
+        run: |
+          uv run --project server --frozen pytest \
+            server/tests/test_node_context_generation.py \
+            server/tests/test_followup_generation.py \
+            server/tests/test_followup_generation_db.py \
+            server/tests/test_insight_generation.py \
+            server/tests/test_insight_generation_db.py
+      - name: 전체 Backend 회귀
+        if: ${{ !cancelled() }}
+        run: uv run --project server --frozen pytest server/tests
+      - name: Backend format
+        if: ${{ !cancelled() }}
+        run: uv run --project server --frozen ruff format --check server
+      - name: Backend Ruff
+        if: ${{ !cancelled() }}
+        run: uv run --project server --frozen ruff check server
+      - name: Backend mypy
+        if: ${{ !cancelled() }}
+        working-directory: server
+        run: uv run --frozen mypy src
+      - name: Migration·metadata 일치 검사
+        if: ${{ !cancelled() }}
+        working-directory: server
+        run: uv run --frozen alembic check
+      - name: 문서 계약 검사
+        if: ${{ !cancelled() }}
+        run: uv run --project server --frozen python scripts/check_docs.py --check
+      - name: diff 검사
+        if: ${{ !cancelled() }}
+        run: git diff HEAD^ HEAD --check
+      - name: 격리 DB 정리
+        if: ${{ always() }}
+        run: docker compose down --volumes

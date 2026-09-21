@@ -1,0 +1,44 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Node.js and Vite
+node_modules/
+.npm/
+.vite/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Python and uv
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.uv-cache/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+build/
+*.egg-info/
+
+# Local PostgreSQL data
+.postgres-data/
+
+# Logs and temporary files
+*.log
+.tmp/
+
+# Editors
+.idea/
+.vscode/
+*.swp
+
+# Operating systems
+.DS_Store
+Thumbs.db
+Desktop.ini

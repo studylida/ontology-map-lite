@@ -1,0 +1,112 @@
+name: Source Materialization
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/source-materialization.yml"
+      - "server/src/ontology_map/source_materialization.py"
+      - "server/src/ontology_map/db/source_materialization.py"
+      - "server/tests/test_source_materialization.py"
+      - "server/tests/test_source_materialization_postgres.py"
+      - "server/tests/test_source_materialization_manifest_postgres.py"
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: deterministic source intake and PostgreSQL regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      COMPOSE_PROJECT_NAME: source111-${{ github.run_id }}-${{ github.run_attempt }}
+      POSTGRES_DB: ontology_map_source111_test
+      POSTGRES_USER: source111_test
+      POSTGRES_PORT: "127.0.0.1:55432"
+      ONTOLOGY_MAP_ENVIRONMENT: development
+      PYTHONPATH: ${{ github.workspace }}/server/src
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Setup uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.12.7"
+          enable-cache: true
+      - name: Verify pinned toolchain
+        run: |
+          git rev-parse HEAD
+          git log -1 --format=%P
+          uv --version
+          uv sync --project server --frozen
+          uv run --project server --frozen python --version
+          uv run --project server --frozen pytest --version
+          uv run --project server --frozen ruff --version
+          uv run --project server --frozen mypy --version
+      - name: Synthetic artifact unit tests
+        if: ${{ !cancelled() }}
+        run: uv run --project server --frozen pytest server/tests/test_source_materialization.py
+      - name: Focused Ruff and mypy
+        if: ${{ !cancelled() }}
+        run: |
+          uv run --project server --frozen ruff check \
+            server/src/ontology_map/source_materialization.py \
+            server/src/ontology_map/db/source_materialization.py \
+            server/tests/test_source_materialization.py \
+            server/tests/test_source_materialization_postgres.py \
+            server/tests/test_source_materialization_manifest_postgres.py
+          uv run --project server --frozen mypy --config-file server/pyproject.toml server/src/ontology_map
+      - name: Backend format and lint
+        if: ${{ !cancelled() }}
+        run: |
+          uv run --project server --frozen ruff format --check server
+          uv run --project server --frozen ruff check server
+      - name: Prepare isolated database credentials
+        if: ${{ !cancelled() }}
+        run: |
+          password="$(openssl rand -hex 24)"
+          echo "::add-mask::$password"
+          url="postgresql+psycopg://${POSTGRES_USER}:${password}@127.0.0.1:55432/${POSTGRES_DB}"
+          echo "::add-mask::$url"
+          {
+            echo "POSTGRES_PASSWORD=$password"
+            echo "ONTOLOGY_MAP_DATABASE_URL=$url"
+            echo "ONTOLOGY_MAP_SOURCE_TEST_DATABASE_URL=$url"
+          } >> "$GITHUB_ENV"
+      - name: Start isolated PostgreSQL
+        if: ${{ !cancelled() }}
+        run: |
+          docker compose version
+          docker compose up --wait --wait-timeout 120 db
+          docker compose exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c 'SELECT version(), current_database();'
+      - name: Apply current migrations
+        if: ${{ !cancelled() }}
+        working-directory: server
+        run: |
+          uv run --frozen alembic upgrade head
+          uv run --frozen alembic current
+      - name: Real PostgreSQL source materialization tests
+        if: ${{ !cancelled() }}
+        run: |
+          uv run --project server --frozen pytest \
+            server/tests/test_source_materialization_postgres.py \
+            server/tests/test_source_materialization_manifest_postgres.py
+      - name: Full backend regression
+        if: ${{ !cancelled() }}
+        run: uv run --project server --frozen pytest -q server/tests
+      - name: Migration metadata check
+        if: ${{ !cancelled() }}
+        working-directory: server
+        run: uv run --frozen alembic check
+      - name: Docs diff and lockfile checks
+        if: ${{ !cancelled() }}
+        run: |
+          uv run --project server --frozen python scripts/check_docs.py --check
+          git diff HEAD^ HEAD --check
+          git diff --exit-code -- server/pyproject.toml server/uv.lock
+      - name: Cleanup isolated database
+        if: ${{ always() }}
+        run: docker compose down --volumes

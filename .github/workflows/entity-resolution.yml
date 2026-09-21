@@ -1,0 +1,117 @@
+name: Entity Resolution
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/entity-resolution.yml"
+      - "compose.yaml"
+      - "server/**"
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: 고정 환경·PostgreSQL 회귀 검사
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      COMPOSE_PROJECT_NAME: er128-${{ github.run_id }}-${{ github.run_attempt }}
+      POSTGRES_DB: ontology_map_er128_test
+      POSTGRES_USER: er128_test
+      POSTGRES_PORT: "127.0.0.1:55432"
+      ONTOLOGY_MAP_ENVIRONMENT: development
+      PYTHONPATH: ${{ github.workspace }}/server/src
+    steps:
+      - name: 저장소 받기
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: uv 준비
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.12.7"
+          enable-cache: true
+      - name: 고정 버전과 checkout 확인
+        run: |
+          git rev-parse HEAD
+          git log -1 --format=%P
+          uv --version
+          uv sync --project server --frozen
+          uv run --project server --frozen python --version
+          uv run --project server --frozen pytest --version
+          uv run --project server --frozen ruff --version
+          uv run --project server --frozen mypy --version
+      - name: Focused 단위 테스트
+        if: ${{ !cancelled() }}
+        run: uv run --project server --frozen pytest server/tests/test_entity_resolution.py
+      - name: 변경 파일 Ruff
+        if: ${{ !cancelled() }}
+        run: |
+          uv run --project server --frozen ruff check \
+            server/src/ontology_map/entity_resolution.py \
+            server/src/ontology_map/entity_resolution_contracts.py \
+            server/src/ontology_map/db/entity_resolution.py \
+            server/tests/test_entity_resolution.py \
+            server/tests/test_entity_resolution_postgres.py \
+            server/tests/test_entity_resolution_top_level_postgres.py
+      - name: 루트 경로에서 설정을 명시한 mypy
+        if: ${{ !cancelled() }}
+        run: uv run --project server --frozen mypy --config-file server/pyproject.toml server/src/ontology_map
+      - name: 저장소 설정을 적용한 mypy
+        if: ${{ !cancelled() }}
+        working-directory: server
+        run: uv run --frozen mypy src
+      - name: Backend format
+        if: ${{ !cancelled() }}
+        run: uv run --project server --frozen ruff format --check server
+      - name: Backend Ruff
+        if: ${{ !cancelled() }}
+        run: uv run --project server --frozen ruff check server
+      - name: 격리 DB의 일회성 credential 준비
+        if: ${{ !cancelled() }}
+        run: |
+          password="$(openssl rand -hex 24)"
+          echo "::add-mask::$password"
+          url="postgresql+psycopg://${POSTGRES_USER}:${password}@127.0.0.1:55432/${POSTGRES_DB}"
+          echo "::add-mask::$url"
+          {
+            echo "POSTGRES_PASSWORD=$password"
+            echo "ONTOLOGY_MAP_DATABASE_URL=$url"
+            echo "ONTOLOGY_MAP_ER_TEST_DATABASE_URL=$url"
+          } >> "$GITHUB_ENV"
+      - name: 기존 Compose의 격리 DB 시작
+        if: ${{ !cancelled() }}
+        run: |
+          docker compose version
+          docker compose up --wait --wait-timeout 120 db
+          docker compose exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c 'SELECT version(), current_database();'
+      - name: 기존 migration 적용과 확인
+        if: ${{ !cancelled() }}
+        working-directory: server
+        run: |
+          uv run --frozen alembic upgrade head
+          uv run --frozen alembic current
+      - name: 실제 PostgreSQL·rollback 테스트
+        if: ${{ !cancelled() }}
+        run: |
+          uv run --project server --frozen pytest \
+            server/tests/test_entity_resolution_postgres.py \
+            server/tests/test_entity_resolution_top_level_postgres.py
+      - name: 전체 backend 회귀 테스트
+        if: ${{ !cancelled() }}
+        run: uv run --project server --frozen pytest -q server/tests
+      - name: Migration·metadata 일치 검사
+        if: ${{ !cancelled() }}
+        working-directory: server
+        run: uv run --frozen alembic check
+      - name: 문서·diff·lockfile 검사
+        if: ${{ !cancelled() }}
+        run: |
+          uv run --project server --frozen python scripts/check_docs.py --check
+          git diff HEAD^ HEAD --check
+          git diff --exit-code -- server/pyproject.toml server/uv.lock
+      - name: 이번 run의 격리 DB 정리
+        if: ${{ always() }}
+        run: docker compose down --volumes
