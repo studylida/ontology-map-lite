@@ -1,54 +1,34 @@
+"""FastAPI 진입점 및 애플리케이션 초기화."""
+
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from fastapi.exceptions import RequestValidationError
 from sqlalchemy import text
 
-from ontology_map.api import (
-    APIError,
-    api_error_handler,
-    router,
-    validation_error_handler,
-)
+from ontology_map.api import router
 from ontology_map.db.session import get_engine
-from ontology_map.pagination import InvalidCursorError
-from ontology_map.panel import PanelNotFoundError, PanelNotReadyError
-from ontology_map.panel_api import panel_error_handler
-from ontology_map.panel_api import router as panel_router
 from ontology_map.settings import get_settings
-from ontology_map.topic_api import router as topic_router
 
 
 @asynccontextmanager
 async def lifespan(application: FastAPI) -> AsyncIterator[None]:
+    # 서버 기동 시 DB 연결 상태 확인 (Health check)
     with get_engine().connect() as connection:
         connection.execute(text("SELECT 1"))
-    settings = get_settings()
-    worker = None
-    if settings.source_processing_enabled:
-        from ontology_map.source_worker import SourceWorker
-
-        worker = SourceWorker(get_engine(), settings)
-        worker.start()
-        application.state.source_worker = worker
-    try:
-        yield
-    finally:
-        if worker is not None:
-            worker.shutdown()
+    yield
 
 
 def create_app() -> FastAPI:
     get_settings()
-    application = FastAPI(title="ontology-map API", version="1.0.0", lifespan=lifespan)
-    application.add_exception_handler(APIError, api_error_handler)
-    application.add_exception_handler(RequestValidationError, validation_error_handler)
+    application = FastAPI(
+        title="Ontology Map API",
+        version="2.0.0",
+        description="경량화된 8개 코어 스키마 기반 지식그래프 API",
+        lifespan=lifespan,
+    )
+    # 신규 코어 라우터 등록
     application.include_router(router)
-    application.include_router(panel_router)
-    application.include_router(topic_router)
-    for error_type in (PanelNotFoundError, PanelNotReadyError, InvalidCursorError):
-        application.add_exception_handler(error_type, panel_error_handler)
     return application
 
 
