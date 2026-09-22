@@ -2,7 +2,7 @@
 name = "ontology-map-server"
 version = "0.1.0"
 # 3.14.7으로 진행했음. 
-requires-python = ">=3.11"
+requires-python = ">=3.11,<4.0.0"
 dependencies = [
     "alembic==1.19.1",
     "fastapi==0.141.1",
@@ -19,6 +19,9 @@ dependencies = [
     "sqlalchemy==2.0.52",
     "uvicorn==0.52.4",
 ]
+
+[tool.poetry]
+packages = [{include = "ontology_map", from = "src"}]
 
 [dependency-groups]
 dev = [
