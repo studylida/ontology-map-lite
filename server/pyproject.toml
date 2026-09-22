@@ -1,7 +1,8 @@
 [project]
 name = "ontology-map-server"
 version = "0.1.0"
-requires-python = "==3.14.7"
+# 3.14.7으로 진행했음. 
+requires-python = ">=3.11"
 dependencies = [
     "alembic==1.19.1",
     "fastapi==0.141.1",
