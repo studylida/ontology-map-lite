@@ -3,8 +3,10 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
-from ontology_map.db.metadata import metadata
 from ontology_map.settings import get_settings
+from ontology_map.db.schema import Base
+
+target_metadata = Base.metadata
 
 config = context.config
 if config.config_file_name is not None:
@@ -14,7 +16,6 @@ config.set_main_option(
     "sqlalchemy.url",
     str(get_settings().database_url).replace("%", "%%"),
 )
-target_metadata = metadata
 
 
 def include_object(
