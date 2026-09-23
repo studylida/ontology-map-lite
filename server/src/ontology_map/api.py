@@ -45,7 +45,7 @@ def health_check():
 @router.get("/classifications", response_model=list[ClassificationResponse])
 def list_classifications(session: Session = Depends(open_session)):
     """온톨로지 분류(Classification) 목록 조회."""
-    stmt = select(Classification).where(classification.is_active == True)
+    stmt = select(Classification).where(Classification.is_active.is_(True))
     return session.execute(stmt).scalars().all()
 
 
