@@ -36,6 +36,26 @@
   color: #94a3b8;
 }
 
+.addKnowledgeBtn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  background: #0284c7;
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  border-radius: 6px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.addKnowledgeBtn:hover {
+  background: #0369a1;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.4);
+}
+
 .quickNav {
   display: flex;
   align-items: center;

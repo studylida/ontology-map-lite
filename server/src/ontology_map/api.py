@@ -1,17 +1,26 @@
 """FastAPI 핵심 엔드포인트 라우터."""
 
 from typing import Any, Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, File, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import select, or_
 from sqlalchemy.orm import Session, joinedload
 
 from ontology_map.db.schema import Classification, Document, Node, Relation
 from ontology_map.db.session import open_session
+from ontology_map.schemas import (
+    AgentExtractJsonRequest,
+    IntakeClaim,
+    IntakeEdge,
+    IntakeNode,
+    IntakePayload,
+    IntakeResponse,
+)
 from ontology_map.services.entity_resolution import resolve_or_create_node
 from ontology_map.services.graph_service import get_node_by_id, get_node_subgraph
 from ontology_map.services.insight_service import get_node_insight, get_node_qa_pairs
 from ontology_map.services.intake_service import process_intake
+from ontology_map.services.task_queue import task_queue_manager
 
 router = APIRouter(prefix="/api/v1")
 
@@ -35,62 +44,12 @@ class NodeCreateRequest(BaseModel):
     properties: Optional[dict[str, Any]] = None
 
 
-class IntakeNode(BaseModel):
-    name: str = Field(..., min_length=1, description="엔티티 이름 (필수)")
-    # 분류 코드가 없으면 기본값으로 'GENERAL'을 부여합니다.
-    classification: str = Field(default="GENERAL", description="온톨로지 분류 (기본값 GENERAL)")
-    description: Optional[str] = None
-    properties: Optional[dict[str, Any]] = None
-
-
-class IntakeEdge(BaseModel):
-    source_name: str = Field(..., description="출발 노드 이름 (필수)")
-    target_name: str = Field(..., description="도착 노드 이름 (필수)")
-    # 관계명이 없으면 기본값으로 'RELATED_TO'를 부여합니다.
-    relation: str = Field(default="RELATED_TO", description="관계 유형 (기본값 RELATED_TO)")
-    properties: Optional[dict[str, Any]] = None
-
-
-class IntakeClaim(BaseModel):
-    quote: str = Field(..., description="원천 인용문 또는 엑셀 셀 위치 (필수)")
-    claim_text: Optional[str] = None
-    confidence: Optional[float] = 1.0
-
-
-class IntakePayload(BaseModel):
-    """동기 프로젝트들의 이질적인 데이터를 유연하게 수용하는 최상위 DTO."""
-    source_project: str = Field(..., description="출처 식별자 (예: excel-agent, news-agent, gov-insight)")
-    document_title: Optional[str] = None
-    document_content: Optional[str] = None
-    document_uri: Optional[str] = None
-    
-    # [빈칸 1]: 노드 목록을 받는 필드입니다. 없을 경우 빈 리스트([])를 기본값으로 갖도록 완성해 보세요.
-    nodes: list[IntakeNode] = Field(default_factory=list, description="엔티티 노드 목록")
-
-    # [빈칸 2]: 엣지 목록을 받는 필드입니다. 없을 경우 빈 리스트([])를 기본값으로 갖도록 완성해 보세요.
-    edges: list[IntakeEdge] = Field(default_factory=list, description="관계 엣지 목록")
-
-    claims: list[IntakeClaim] = Field(default_factory=list)
-    raw_metadata: Optional[dict[str, Any]] = None
-
-
-class IntakeResponse(BaseModel):
-    """적재 성공 후 클라이언트에게 반환할 요약 결과."""
-    status: str = "success"
-    source_project: str
-    document_id: Optional[int] = None
-    nodes_created: int
-    edges_created: int
-    claims_created: int
-
-
 class NodeSearchItem(BaseModel):
     id: int
     name: str
     classification_code: str
     classification_name: str
     description: Optional[str] = None
-
 
 
 # --- Endpoints ---
@@ -193,9 +152,6 @@ def search_nodes(
     """노드 이름 및 설명 대상 대소문자 무시 부분 일치 검색 API."""
     clean_q = q.strip()
     
-    # [빈칸 1]: Node.name 또는 Node.description에 clean_q가 포함되어 있는지
-    #           대소문자 무시(ilike) 조건을 or_() 안에 채워보세요.
-    # 힌트: Node.name.ilike(f"%{clean_q}%")
     stmt = (
         select(Node)
         .options(joinedload(Node.classification))
@@ -221,3 +177,54 @@ def search_nodes(
         )
         for n in nodes
     ]
+
+# --- Agent Extraction Queue Endpoints ---
+
+@router.post("/agent/extract-async", status_code=status.HTTP_202_ACCEPTED)
+async def extract_knowledge_async(payload: AgentExtractJsonRequest):
+    """웹 URL 또는 텍스트 메모를 비동기 대기열에 등록합니다 (202 Accepted)."""
+    # [빈칸 1]: task_queue_manager의 enqueue 메서드를 await로 호출하여 task_id를 발급받으세요.
+    task_id = await task_queue_manager.enqueue(
+        source_type=payload.source_type,
+        raw_data=payload.content,
+        filename_or_url=payload.title,
+    )
+    return {"task_id": task_id, "status": "pending"}
+
+
+@router.post("/agent/extract-async/file", status_code=status.HTTP_202_ACCEPTED)
+async def extract_file_async(file: UploadFile = File(...)):
+    """PDF/DOCX/TXT 문서를 업로드받아 비동기 대기열에 등록합니다 (202 Accepted)."""
+    file_bytes = await file.read()
+    task_id = await task_queue_manager.enqueue(
+        source_type="file",
+        raw_data=file_bytes,
+        filename_or_url=file.filename,
+    )
+    return {"task_id": task_id, "status": "pending"}
+
+
+@router.get("/agent/tasks")
+def list_agent_tasks():
+    """현재 백그라운드 대기열 및 완료된 작업 목록을 조회합니다 (폴링용)."""
+    tasks = task_queue_manager.list_tasks()
+    return [t.to_summary_dict() for t in tasks]
+
+
+@router.get("/agent/tasks/{task_id}")
+def get_agent_task(task_id: str):
+    """특정 대기열 작업의 진행 상태 및 추출 결과(IntakePayload)를 조회합니다."""
+    task = task_queue_manager.get_task(task_id)
+    if not task:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+    data = task.to_summary_dict()
+    data["result"] = task.result.model_dump() if task.result else None
+    return data
+
+
+@router.delete("/agent/tasks/{task_id}")
+def dismiss_agent_task(task_id: str):
+    """완료되거나 확인한 작업을 대기열 목록에서 제거합니다."""
+    if not task_queue_manager.dismiss_task(task_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+    return {"status": "ok"}
