@@ -27,6 +27,7 @@ export function GraphCanvas({
     const graph = new ForceGraph3D(containerRef.current)
       .backgroundColor("#0a0a0c")
       .nodeLabel("name")
+      .linkLabel((link: any) => link.label)
       .nodeAutoColorBy("classification_id")
       .nodeRelSize(6)
       .linkOpacity(0.3)

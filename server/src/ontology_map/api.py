@@ -3,8 +3,8 @@
 from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy import select, or_
+from sqlalchemy.orm import Session, joinedload
 
 from ontology_map.db.schema import Classification, Document, Node, Relation
 from ontology_map.db.session import open_session
@@ -34,7 +34,6 @@ class NodeCreateRequest(BaseModel):
     description: Optional[str] = None
     properties: Optional[dict[str, Any]] = None
 
-# --- Response / Request Schemas 구역에 추가 ---
 
 class IntakeNode(BaseModel):
     name: str = Field(..., min_length=1, description="엔티티 이름 (필수)")
@@ -83,6 +82,17 @@ class IntakeResponse(BaseModel):
     nodes_created: int
     edges_created: int
     claims_created: int
+
+
+class NodeSearchItem(BaseModel):
+    id: int
+    name: str
+    classification_code: str
+    classification_name: str
+    description: Optional[str] = None
+
+
+
 # --- Endpoints ---
 
 @router.get("/health", response_model=HealthResponse)
@@ -173,3 +183,41 @@ def intake_external_data(
     result = process_intake(session=session, payload=payload)
     session.commit()
     return result
+
+
+@router.get("/nodes/search", response_model=list[NodeSearchItem])
+def search_nodes(
+    q: str = "",
+    session: Session = Depends(open_session),
+):
+    """노드 이름 및 설명 대상 대소문자 무시 부분 일치 검색 API."""
+    clean_q = q.strip()
+    
+    # [빈칸 1]: Node.name 또는 Node.description에 clean_q가 포함되어 있는지
+    #           대소문자 무시(ilike) 조건을 or_() 안에 채워보세요.
+    # 힌트: Node.name.ilike(f"%{clean_q}%")
+    stmt = (
+        select(Node)
+        .options(joinedload(Node.classification))
+        .where(
+            or_(
+                Node.name.ilike(f"%{clean_q}%"),
+                Node.description.ilike(f"%{clean_q}%"),
+            )
+        )
+        .order_by(Node.id.desc())
+        .limit(20)
+    )
+    
+    nodes = session.execute(stmt).scalars().all()
+    
+    return [
+        NodeSearchItem(
+            id=n.id,
+            name=n.name,
+            classification_code=n.classification.code,
+            classification_name=n.classification.display_name,
+            description=n.description,
+        )
+        for n in nodes
+    ]

@@ -59,3 +59,12 @@ export interface NodeInsightsResponse {
   insight: NodeInsight | null;
   qa_pairs: NodeQAPair[];
 }
+
+// 4. 노드 검색 결과 아이템
+export interface NodeSearchItem {
+  id: number;
+  name: string;
+  classification_code: string;
+  classification_name: string;
+  description?: string | null;
+}

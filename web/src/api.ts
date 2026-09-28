@@ -2,6 +2,7 @@ import type {
   Classification,
   NodeInsightsResponse,
   SubgraphResponse,
+  NodeSearchItem,
 } from "./types";
 
 const BASE_URL = "/api/v1";
@@ -41,5 +42,14 @@ export async function fetchNodeInsights(
 ): Promise<NodeInsightsResponse> {
   const res = await fetch(`${BASE_URL}/nodes/${nodeId}/insights`);
   if (!res.ok) throw new Error(`노드(ID: ${nodeId}) 인사이트 로드 실패`);
+  return res.json();
+}
+
+/**
+ * 5. 노드 검색 API 호출
+ */
+export async function searchNodes(query: string = ""): Promise<NodeSearchItem[]> {
+  const res = await fetch(`${BASE_URL}/nodes/search?q=${encodeURIComponent(query)}`);
+  if (!res.ok) throw new Error("노드 검색 요청 실패");
   return res.json();
 }
