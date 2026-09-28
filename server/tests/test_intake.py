@@ -251,3 +251,47 @@ def test_cross_project_knowledge_fusion(client: TestClient, db_session: Session)
     assert shared_tech in neighbor_names             # News 출처 연결 확인
     assert f"GovProject_{run_id}" in neighbor_names # GovInsight 출처 연결 확인
     assert f"영업이익_{run_id}" in neighbor_names    # Excel 출처 연결 확인
+
+
+def test_cross_knowledge_linkage_to_existing_db_node(client: TestClient, db_session: Session):
+    """5. 동적 지식 교차 연결 검증: payload.nodes에 미포함된 기존 DB 엔티티와도 엣지가 정상 연결되는지 검증."""
+    run_id = uuid.uuid4().hex[:6]
+    existing_corp = f"CoreEnterprise_{run_id}"
+
+    # Step 1: 기존 기업 노드를 먼저 DB에 생성
+    seed_payload = {
+        "source_project": "seed",
+        "document_title": "기초 데이터",
+        "nodes": [{"name": existing_corp, "classification": "COMPANY"}],
+        "edges": [],
+    }
+    client.post("/api/v1/intake", json=seed_payload)
+
+    # Step 2: 신규 문서가 유입될 때, payload.nodes에는 existing_corp가 없지만 edges에서 existing_corp를 참조
+    new_doc_payload = {
+        "source_project": "agent-ingestion",
+        "document_title": "신규 파트너십 발표",
+        "nodes": [
+            {"name": f"Startup_{run_id}", "classification": "COMPANY"},
+        ],
+        "edges": [
+            {
+                "source_name": f"Startup_{run_id}",
+                "target_name": existing_corp,  # DB에 이미 존재하는 노드!
+                "relation": "PARTNERS_WITH",
+            }
+        ],
+    }
+    res = client.post("/api/v1/intake", json=new_doc_payload)
+    assert res.status_code == 200
+    data = res.json()
+    assert data["nodes_created"] == 1  # Startup만 생성
+    assert data["edges_created"] == 1  # Startup -> CoreEnterprise 연결 성공!
+
+    # 서브그래프에서 교차 연결 확인
+    startup_node = db_session.execute(select(Node).where(Node.name == f"Startup_{run_id}")).scalar_one()
+    graph_res = client.get(f"/api/v1/nodes/{startup_node.id}/graph")
+    assert graph_res.status_code == 200
+    neighbor_names = [n["name"] for n in graph_res.json()["nodes"]]
+    assert existing_corp in neighbor_names
+

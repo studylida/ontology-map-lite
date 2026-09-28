@@ -43,6 +43,7 @@ def extract_ontology_from_text(
     title: str,
     content: str,
     source_type: str = "document",
+    existing_entities: list[str] | None = None,
     api_key: str | None = None,
     base_url: str | None = None,
     model: str | None = None,
@@ -56,12 +57,26 @@ def extract_ontology_from_text(
     # 컨텍스트 과다 입력 방지 (최대 15,000자 제한)
     trimmed_content = content[:15000]
 
+    cross_link_instruction = ""
+    if existing_entities and len(existing_entities) > 0:
+        entity_list_str = ", ".join(existing_entities[:50])
+        cross_link_instruction = f"""
+[지식 교차 연결 (Cross-Knowledge Linkage)]
+현재 시스템 지식베이스에 다음 주요 엔티티들이 이미 등록되어 있습니다:
+{entity_list_str}
+
+문서 분석 시, 새로 발견된 엔티티가 기존 엔티티들과 관계(예: 투자, 파트너십, 공급, 인물 소속, 기술 적용 등)를 맺고 있거나 합리적 연계점(Cross-Link)이 있다면:
+- "edges" 항목에 기존 엔티티와의 연결 관계를 적극적으로 포함하세요 (source_name 또는 target_name에 기존 엔티티명 지정).
+- 단, 문서 맥락상 근거가 명확한 관계만 연결하세요.
+- (참고: 향후 고도화 단계에서는 JEV(TypeSafe Jev)가 엄격한 교차 검증 및 환각 필터링을 수행할 예정입니다.)
+"""
+
     user_prompt = f"""[문서 제목]: {title}
 [문서 유형]: {source_type}
 
 [문서 본문]:
 {trimmed_content}
-
+{cross_link_instruction}
 위 문서에서 노드, 관계, 인용문, 요약을 추출하여 JSON으로 반환하세요.
 형식:
 {{

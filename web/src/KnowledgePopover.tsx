@@ -15,7 +15,10 @@ interface MatchItem {
 
 export function KnowledgePopover({ onSelectNode }: KnowledgePopoverProps) {
   const [isOpen, setIsOpen] = useState<boolean>(false);
-  const [position, setPosition] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+  const [position, setPosition] = useState<{ top: number; left: number }>({
+    top: 0,
+    left: 0,
+  });
   const [selectedText, setSelectedText] = useState<string>("");
   const [results, setResults] = useState<MatchItem[]>([]);
   const popoverRef = useRef<HTMLDivElement | null>(null);
@@ -33,7 +36,7 @@ export function KnowledgePopover({ onSelectNode }: KnowledgePopoverProps) {
         return;
       }
 
-      const text = selection.toString().trim()
+      const text = selection.toString().trim();
 
       // 2글자 미만이거나 30글자 초과 시 팝오버를 띄우지 않음
       if (text.length < 2 || text.length > 30) {
@@ -51,12 +54,16 @@ export function KnowledgePopover({ onSelectNode }: KnowledgePopoverProps) {
         // 간단한 매칭 이유 레이블링
         const matches: MatchItem[] = raw.slice(0, 4).map((node) => {
           let reason = "연관 노드";
-          if (node.name.toLowerCase().includes(text.toLowerCase())) reason = "이름 일치";
-          else if (node.classification_code?.toLowerCase().includes(text.toLowerCase())) reason = "분류 일치";
+          if (node.name.toLowerCase().includes(text.toLowerCase()))
+            reason = "이름 일치";
+          else if (
+            node.classification_code?.toLowerCase().includes(text.toLowerCase())
+          )
+            reason = "분류 일치";
           return { node, matchedReason: reason };
         });
 
-        const rect = selection.getRangeAt(0).getBoundingClientRect()
+        const rect = selection.getRangeAt(0).getBoundingClientRect();
 
         // ⭐ 블로그의 화면 경계 보정 (Collision Detection) 계산식
         const popoverWidth = 300;
@@ -64,11 +71,17 @@ export function KnowledgePopover({ onSelectNode }: KnowledgePopoverProps) {
 
         // 가로: 선택 영역 중앙에 맞추되 좌우 경계를 벗어나지 않도록 방어
         let left = rect.left + rect.width / 2 - popoverWidth / 2;
-        left = Math.max(16, Math.min(window.innerWidth - popoverWidth - 16, left));
+        left = Math.max(
+          16,
+          Math.min(window.innerWidth - popoverWidth - 16, left),
+        );
 
         // 세로: 기본은 아래쪽(+8px), 아래 공간이 모자라면 위쪽으로 배치
         let top = rect.bottom + 8;
-        if (top + popoverHeight > window.innerHeight && rect.top > popoverHeight + 16) {
+        if (
+          top + popoverHeight > window.innerHeight &&
+          rect.top > popoverHeight + 16
+        ) {
           top = rect.top - popoverHeight - 8;
         }
 
@@ -86,7 +99,10 @@ export function KnowledgePopover({ onSelectNode }: KnowledgePopoverProps) {
       if (e.key === "Escape") setIsOpen(false);
     };
     const handleClickOutside = (e: MouseEvent) => {
-      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
+      if (
+        popoverRef.current &&
+        !popoverRef.current.contains(e.target as Node)
+      ) {
         setIsOpen(false);
       }
     };

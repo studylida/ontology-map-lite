@@ -7,7 +7,12 @@ import { NodeSearch } from "./NodeSearch";
 import { KnowledgePopover } from "./KnowledgePopover";
 import { IngestionQueueNotice } from "./IngestionQueueNotice";
 import { KnowledgeIngestionModal } from "./KnowledgeIngestionModal";
-import type { ExtractionTaskSummary, GraphEdge, GraphNode, NodeSearchItem } from "./types";
+import type {
+  ExtractionTaskSummary,
+  GraphEdge,
+  GraphNode,
+  NodeSearchItem,
+} from "./types";
 import styles from "./App.module.css";
 
 export function App() {
@@ -18,6 +23,8 @@ export function App() {
   const [nodes, setNodes] = useState<GraphNode[]>([]);
   const [edges, setEdges] = useState<GraphEdge[]>([]);
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
+  const [hasOmitted, setHasOmitted] = useState<boolean>(false);
+  const [omittedCount, setOmittedCount] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -27,23 +34,58 @@ export function App() {
   const [modalMode, setModalMode] = useState<"input" | "review">("input");
   const [reviewTaskId, setReviewTaskId] = useState<string | null>(null);
 
-  // 3. 중심 노드 변경 시 서브그래프 로드
-  const loadGraph = useCallback(async (nodeId: number) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetchSubgraph(nodeId);
-      setNodes(res.nodes);
-      setEdges(res.edges);
+  // 3. 중심 노드 변경 시 서브그래프 로드 (기존 탐색 노드는 ambient로 누적 보존)
+  const loadGraph = useCallback(
+    async (nodeId: number, unbounded: boolean = false) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await fetchSubgraph(nodeId, unbounded);
 
-      const center = res.nodes.find((n) => n.id === nodeId) ?? res.nodes[0] ?? null;
-      setSelectedNode(center);
-    } catch (err: any) {
-      setError(err.message ?? "그래프 데이터를 불러오는 중 오류가 발생했습니다.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+        setNodes((prevNodes) => {
+          const newMap = new Map(res.nodes.map((n) => [n.id, n]));
+          const merged: GraphNode[] = [...res.nodes];
+          for (const oldNode of prevNodes) {
+            if (!newMap.has(oldNode.id)) {
+              merged.push({
+                ...oldNode,
+                tier: "ambient" as any,
+              });
+            }
+          }
+          return merged;
+        });
+
+        setEdges((prevEdges) => {
+          const newMap = new Map(res.edges.map((e) => [e.id, e]));
+          const merged: GraphEdge[] = [...res.edges];
+          for (const oldEdge of prevEdges) {
+            if (!newMap.has(oldEdge.id)) {
+              merged.push({
+                ...oldEdge,
+                tier: "ambient" as any,
+              });
+            }
+          }
+          return merged;
+        });
+
+        setHasOmitted(Boolean(res.has_omitted));
+        setOmittedCount(res.omitted_count ?? 0);
+
+        const center =
+          res.nodes.find((n) => n.id === nodeId) ?? res.nodes[0] ?? null;
+        setSelectedNode(center);
+      } catch (err: any) {
+        setError(
+          err.message ?? "그래프 데이터를 불러오는 중 오류가 발생했습니다.",
+        );
+      } finally {
+        setLoading(false);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     loadGraph(centerNodeId);
@@ -64,14 +106,29 @@ export function App() {
     return () => clearInterval(timer);
   }, []);
 
-  // 5. 인터랙션 핸들러들 (useCallback으로 메모이제이션하여 불필요한 자식 리렌더링 차단)
-  const handleNodeClick = useCallback((node: GraphNode) => {
-    setSelectedNode(node);
-  }, []);
+  // 5. 인터랙션 핸들러들
+  const handleNodeClick = useCallback(
+    (node: GraphNode) => {
+      setSelectedNode(node);
+      setCenterNodeId(node.id);
+      loadGraph(node.id);
+    },
+    [loadGraph],
+  );
 
-  const handleSelectSearchedNode = useCallback((item: NodeSearchItem) => {
-    setCenterNodeId(item.id);
-  }, []);
+  const handlePanBoundary = useCallback(() => {
+    if (hasOmitted && !loading) {
+      loadGraph(centerNodeId, true);
+    }
+  }, [hasOmitted, loading, centerNodeId, loadGraph]);
+
+  const handleSelectSearchedNode = useCallback(
+    (item: NodeSearchItem) => {
+      setCenterNodeId(item.id);
+      loadGraph(item.id);
+    },
+    [loadGraph],
+  );
 
   // 모달 열기 핸들러들
   const handleOpenInputModal = () => {
@@ -161,17 +218,38 @@ export function App() {
         </div>
       </header>
 
+      {/* 미표시된 이웃 노드가 존재할 때 안내 배너 및 전체 펼치기 버튼 */}
+      {hasOmitted && (
+        <div className={styles.omittedBanner}>
+          <span className={styles.omittedText}>
+            ⚠️ 미표시된 이웃 노드가 존재함
+          </span>
+          <button
+            type="button"
+            className={styles.expandAllBtn}
+            onClick={() => loadGraph(centerNodeId, true)}
+            title="생략된 모든 이웃 노드를 캔버스에 추가로 불러옵니다"
+          >
+            이웃 노드 모두 펼치기
+          </button>
+        </div>
+      )}
+
       {/* 메인 뷰: 전체 화면 3D 캔버스 */}
       <main className={styles.mainCanvas}>
-        {loading && <div className={styles.overlayMessage}>그래프 로딩 중...</div>}
+        {loading && (
+          <div className={styles.overlayMessage}>그래프 로딩 중...</div>
+        )}
         {error && <div className={styles.errorMessage}>오류 발생: {error}</div>}
 
         <GraphCanvas
           ref={canvasRef}
           nodes={nodes}
           edges={edges}
+          centerNodeId={centerNodeId}
           selectedNodeId={selectedNode?.id ?? null}
           onNodeClick={handleNodeClick}
+          onPanBoundary={handlePanBoundary}
         />
       </main>
 
@@ -191,7 +269,9 @@ export function App() {
           reviewTaskId={reviewTaskId}
           onClose={() => setIsModalOpen(false)}
           onTaskEnqueued={() => {
-            fetchAgentTasks().then(setTasks).catch(() => {});
+            fetchAgentTasks()
+              .then(setTasks)
+              .catch(() => {});
           }}
           onIngestionSuccess={handleIngestionSuccess}
         />

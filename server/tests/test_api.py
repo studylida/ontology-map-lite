@@ -124,3 +124,19 @@ def test_get_node_insights(client: TestClient, db_session: Session):
         assert "insight" in data
         assert "qa_pairs" in data
         assert data["node_id"] == existing_node.id
+
+
+def test_get_node_details(client: TestClient, db_session: Session):
+    """노드 상세 정보(속성 + 원천 근거 Claims) 종합 조회 API 검증."""
+    stmt = select(Node).limit(1)
+    existing_node = db_session.execute(stmt).scalars().first()
+
+    if existing_node:
+        res = client.get(f"/api/v1/nodes/{existing_node.id}/details")
+        assert res.status_code == 200
+        data = res.json()
+        assert data["node_id"] == existing_node.id
+        assert data["name"] == existing_node.name
+        assert "properties" in data
+        assert "claims" in data
+        assert "qa_pairs" in data

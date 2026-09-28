@@ -1,6 +1,7 @@
 import type {
   Classification,
   NodeInsightsResponse,
+  NodeDetailsResponse,
   SubgraphResponse,
   NodeSearchItem,
   ExtractionTaskSummary,
@@ -30,16 +31,31 @@ export async function fetchClassifications(): Promise<Classification[]> {
 }
 
 /**
- * 3. 특정 노드 기준 1-hop 서브그래프 조회
+ * 3. 특정 노드 기준 1~3 hop 계층 서브그래프 조회
  */
-export async function fetchSubgraph(nodeId: number): Promise<SubgraphResponse> {
-  const res = await fetch(`${BASE_URL}/nodes/${nodeId}/graph`);
+export async function fetchSubgraph(
+  nodeId: number,
+  unbounded: boolean = false,
+): Promise<SubgraphResponse> {
+  const query = unbounded ? "?unbounded=true" : "";
+  const res = await fetch(`${BASE_URL}/nodes/${nodeId}/graph${query}`);
   if (!res.ok) throw new Error(`노드(ID: ${nodeId}) 서브그래프 로드 실패`);
   return res.json();
 }
 
 /**
- * 4. 특정 노드의 인사이트 및 Q&A 목록 조회
+ * 4. 특정 노드의 상세 정보(개요, 원천 근거, AI 분석, Q&A) 종합 조회
+ */
+export async function fetchNodeDetails(
+  nodeId: number,
+): Promise<NodeDetailsResponse> {
+  const res = await fetch(`${BASE_URL}/nodes/${nodeId}/details`);
+  if (!res.ok) throw new Error(`노드(ID: ${nodeId}) 상세 정보 로드 실패`);
+  return res.json();
+}
+
+/**
+ * 5. 특정 노드의 인사이트 및 Q&A 목록 조회 (레거시 호환)
  */
 export async function fetchNodeInsights(
   nodeId: number,
@@ -52,8 +68,12 @@ export async function fetchNodeInsights(
 /**
  * 5. 노드 검색 API 호출
  */
-export async function searchNodes(query: string = ""): Promise<NodeSearchItem[]> {
-  const res = await fetch(`${BASE_URL}/nodes/search?q=${encodeURIComponent(query)}`);
+export async function searchNodes(
+  query: string = "",
+): Promise<NodeSearchItem[]> {
+  const res = await fetch(
+    `${BASE_URL}/nodes/search?q=${encodeURIComponent(query)}`,
+  );
   if (!res.ok) throw new Error("노드 검색 요청 실패");
   return res.json();
 }
@@ -139,4 +159,3 @@ export async function intakeKnowledge(
   }
   return res.json();
 }
-

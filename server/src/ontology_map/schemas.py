@@ -50,3 +50,24 @@ class AgentExtractJsonRequest(BaseModel):
     source_type: Literal["url", "text"] = "text"
     content: str = Field(..., min_length=1)
     title: Optional[str] = None
+
+
+class NodeClaimItem(BaseModel):
+    id: int
+    quote: str
+    statement: str
+    document_title: Optional[str] = "출처 문서"
+
+
+class NodeDetailsResponse(BaseModel):
+    node_id: int
+    name: str
+    classification_code: str
+    classification_name: str
+    description: Optional[str] = None
+    properties: dict[str, Any] = Field(default_factory=dict)
+    claims: list[NodeClaimItem] = Field(default_factory=list)
+    recent_history_summary: Optional[str] = None
+    overall_insight: Optional[str] = None
+    issues: Optional[list[Any]] = None
+    qa_pairs: list[dict[str, Any]] = Field(default_factory=list)

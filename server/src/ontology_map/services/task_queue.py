@@ -7,8 +7,12 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Literal, Optional, Tuple
 import uuid
 
+from sqlalchemy.orm import Session
+
+from ontology_map.db.session import get_engine
 from ontology_map.schemas import IntakePayload
 from ontology_map.services.document_parser import extract_document_text
+from ontology_map.services.entity_resolution import get_existing_entity_names
 from ontology_map.services.ingestion_agent import extract_ontology_from_text
 
 TaskStatus = Literal["pending", "processing", "completed", "failed"]
@@ -69,7 +73,21 @@ class TaskQueueManager:
                 title, content = extract_document_text(source_type, raw_data, filename_or_url)
                 task.title = title
 
-                payload: IntakePayload = await asyncio.to_thread(extract_ontology_from_text, title, content, source_type)
+                # 2. 기존 지식베이스의 주요 노드명 조회 (지식 교차 Weaving용)
+                existing_entities: list[str] = []
+                try:
+                    with Session(get_engine()) as session:
+                        existing_entities = get_existing_entity_names(session, limit=60)
+                except Exception:
+                    pass
+
+                payload: IntakePayload = await asyncio.to_thread(
+                    extract_ontology_from_text,
+                    title,
+                    content,
+                    source_type,
+                    existing_entities,
+                )
 
                 task.result = payload
                 task.status = "completed"

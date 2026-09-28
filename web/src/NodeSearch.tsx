@@ -21,7 +21,10 @@ export function NodeSearch({ onSelectNode }: NodeSearchProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   // [블로그 knowledgeEngine.ts 이식]: 가중치 스코어링 함수
-  function scoreAndRankNodes(query: string, rawNodes: NodeSearchItem[]): MatchResult[] {
+  function scoreAndRankNodes(
+    query: string,
+    rawNodes: NodeSearchItem[],
+  ): MatchResult[] {
     const cleanQuery = query.trim().toLowerCase();
     if (!cleanQuery) return [];
 
@@ -36,7 +39,11 @@ export function NodeSearch({ onSelectNode }: NodeSearchProps) {
       const lowerDesc = (node.description ?? "").toLowerCase();
 
       // 1순위: 분류(Classification) 일치 (+15점)
-      if (lowerCls === cleanQuery || lowerCls.includes(cleanQuery) || cleanQuery.includes(lowerCls)) {
+      if (
+        lowerCls === cleanQuery ||
+        lowerCls.includes(cleanQuery) ||
+        cleanQuery.includes(lowerCls)
+      ) {
         score += 15;
         matchedReason = `[${node.classification_code}] 분류 일치`;
       }
@@ -91,7 +98,10 @@ export function NodeSearch({ onSelectNode }: NodeSearchProps) {
       if (e.key === "Escape") setIsOpen(false);
     };
     const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(e.target as Node)
+      ) {
         setIsOpen(false);
       }
     };

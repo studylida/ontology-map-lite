@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select, or_
 from sqlalchemy.orm import Session, joinedload
 
-from ontology_map.db.schema import Classification, Document, Node, Relation
+from ontology_map.db.schema import Claim, Classification, Document, Node, Relation
 from ontology_map.db.session import open_session
 from ontology_map.schemas import (
     AgentExtractJsonRequest,
@@ -15,6 +15,8 @@ from ontology_map.schemas import (
     IntakeNode,
     IntakePayload,
     IntakeResponse,
+    NodeClaimItem,
+    NodeDetailsResponse,
 )
 from ontology_map.services.entity_resolution import resolve_or_create_node
 from ontology_map.services.graph_service import get_node_by_id, get_node_subgraph
@@ -91,13 +93,71 @@ def create_or_resolve_node(
 @router.get("/nodes/{node_id}/graph")
 def get_subgraph(
     node_id: int,
+    unbounded: bool = False,
+    limit: int = 60,
     session: Session = Depends(open_session),
 ):
-    """특정 노드 중심 1-hop 서브그래프 조회."""
-    result = get_node_subgraph(session, node_id)
+    """특정 노드 중심 BFS 다계층(1~4 hop) 서브그래프 조회."""
+    hop_limit = None if unbounded else limit
+    result = get_node_subgraph(session, node_id, max_hops=4, hop_limit=hop_limit)
     if not result["nodes"]:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Node not found")
     return result
+
+
+@router.get("/nodes/{node_id}/details", response_model=NodeDetailsResponse)
+def get_node_details(
+    node_id: int,
+    session: Session = Depends(open_session),
+):
+    """노드 상세 정보: 기본 속성, 원천 인용 근거(Claims), AI 인사이트 종합 반환."""
+    node = get_node_by_id(session, node_id)
+    if not node:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Node not found")
+
+    # 1. 노드와 연관된 원천 Claim(인용구) 탐색 (이름 매칭)
+    stmt_claims = (
+        select(Claim)
+        .options(joinedload(Claim.document))
+        .where(
+            or_(
+                Claim.statement.ilike(f"%{node.name}%"),
+                Claim.quote_text.ilike(f"%{node.name}%"),
+            )
+        )
+        .limit(10)
+    )
+    claims = session.execute(stmt_claims).scalars().all()
+    claim_items = [
+        NodeClaimItem(
+            id=c.id,
+            quote=c.quote_text,
+            statement=c.statement,
+            document_title=c.document.title if c.document else "원천 문서",
+        )
+        for c in claims
+    ]
+
+    # 2. 사전 생성된 Insight / QA 페어 조회
+    insight = get_node_insight(session, node_id)
+    qa_pairs = get_node_qa_pairs(session, node_id)
+
+    return NodeDetailsResponse(
+        node_id=node.id,
+        name=node.name,
+        classification_code=node.classification.code,
+        classification_name=node.classification.display_name,
+        description=node.description,
+        properties=node.properties or {},
+        claims=claim_items,
+        recent_history_summary=insight.recent_history_summary if insight else None,
+        overall_insight=insight.overall_insight if insight else None,
+        issues=insight.issues if insight else None,
+        qa_pairs=[
+            {"question": q.question, "answer": q.answer, "sequence": q.sequence}
+            for q in qa_pairs
+        ],
+    )
 
 
 @router.get("/nodes/{node_id}/insights")

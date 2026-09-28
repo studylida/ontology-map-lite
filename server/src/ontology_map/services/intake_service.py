@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ontology_map.db.schema import Claim, Classification, Document, Edge, Relation
-from ontology_map.services.entity_resolution import resolve_or_create_node
+from ontology_map.services.entity_resolution import find_node_by_name, resolve_or_create_node
 
 
 def get_or_create_classification(session: Session, code: str) -> Classification:
@@ -80,11 +80,24 @@ def process_intake(session: Session, payload: Any) -> dict[str, Any]:
         node = resolve_or_create_node(session, n.name, cls_obj.code, n.description, n.properties)
         node_name_map[n.name] = node
 
-    # 4. 엣지(Edge) 처리: 노드 간 연결선 생성
+    # 4. 엣지(Edge) 처리: 노드 간 연결선 생성 (신규 노드 및 DB 기존 노드 자동 해소)
     edges_created_count = 0
     for e in payload.edges:
         source_node = node_name_map.get(e.source_name)
+        if not source_node:
+            source_node = find_node_by_name(session, e.source_name)
+            if not source_node:
+                cls_gen = get_or_create_classification(session, "GENERAL")
+                source_node = resolve_or_create_node(session, e.source_name, cls_gen.code)
+            node_name_map[e.source_name] = source_node
+
         target_node = node_name_map.get(e.target_name)
+        if not target_node:
+            target_node = find_node_by_name(session, e.target_name)
+            if not target_node:
+                cls_gen = get_or_create_classification(session, "GENERAL")
+                target_node = resolve_or_create_node(session, e.target_name, cls_gen.code)
+            node_name_map[e.target_name] = target_node
 
         if source_node and target_node:
             rel_obj = get_or_create_relation(session, e.relation)

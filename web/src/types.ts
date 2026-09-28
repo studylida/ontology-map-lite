@@ -7,13 +7,17 @@ export interface Classification {
 }
 
 // 2. 그래프 노드 & 엣지
+export type NodeTier = "CENTER" | "DIRECT" | "TWO_HOP" | "THREE_HOP" | "AMBIENT";
+
 export interface GraphNode {
   id: number;
   name: string;
   classification_id: number;
   classification_code?: string;
+  classification_name?: string;
   description?: string | null;
   properties?: Record<string, unknown>;
+  tier?: NodeTier;
 }
 
 export interface GraphEdge {
@@ -23,13 +27,16 @@ export interface GraphEdge {
   relation_code?: string;
   relation_name?: string;
   properties?: Record<string, unknown>;
+  tier?: NodeTier;
 }
 
 // GET /api/v1/nodes/{id}/graph 응답
 export interface SubgraphResponse {
-  center_node_id: number;
+  center_node_id: number | null;
   nodes: GraphNode[];
   edges: GraphEdge[];
+  has_omitted?: boolean;
+  omitted_count?: number;
 }
 
 // 3. 노드 인사이트 & Q&A
@@ -57,6 +64,27 @@ export interface NodeInsightsResponse {
   node_id: number;
   node_name: string;
   insight: NodeInsight | null;
+  qa_pairs: NodeQAPair[];
+}
+
+export interface NodeClaimItem {
+  id: number;
+  quote: string;
+  statement: string;
+  document_title?: string;
+}
+
+export interface NodeDetailsResponse {
+  node_id: number;
+  name: string;
+  classification_code: string;
+  classification_name: string;
+  description?: string | null;
+  properties: Record<string, unknown>;
+  claims: NodeClaimItem[];
+  recent_history_summary?: string | null;
+  overall_insight?: string | null;
+  issues?: Array<string | IssueItem> | null;
   qa_pairs: NodeQAPair[];
 }
 
@@ -132,4 +160,3 @@ export interface ExtractionTaskSummary {
 export interface ExtractionTaskDetail extends ExtractionTaskSummary {
   result: IntakePayload | null;
 }
-

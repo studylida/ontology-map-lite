@@ -40,3 +40,17 @@ def resolve_or_create_node(
         session.flush()  # DB에 즉시 반영하여 id를 발급받음
 
     return node
+
+
+def find_node_by_name(session: Session, name: str) -> Optional[Node]:
+    """이름으로 기존 노드를 단건 조회합니다."""
+    clean_name = name.strip()
+    stmt = select(Node).where(Node.name == clean_name)
+    return session.execute(stmt).scalar_one_or_none()
+
+
+def get_existing_entity_names(session: Session, limit: int = 60) -> list[str]:
+    """DB에 등록된 주요 노드 엔티티 이름 목록을 조회합니다."""
+    stmt = select(Node.name).order_by(Node.id.asc()).limit(limit)
+    return list(session.execute(stmt).scalars().all())
+

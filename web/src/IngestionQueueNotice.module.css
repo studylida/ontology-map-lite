@@ -36,7 +36,9 @@
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .badge {
@@ -112,10 +114,18 @@
   font-size: 11px;
 }
 
-.statusPending { color: #94a3b8; }
-.statusProcessing { color: #38bdf8; }
-.statusCompleted { color: #4ade80; }
-.statusFailed { color: #f87171; }
+.statusPending {
+  color: #94a3b8;
+}
+.statusProcessing {
+  color: #38bdf8;
+}
+.statusCompleted {
+  color: #4ade80;
+}
+.statusFailed {
+  color: #f87171;
+}
 
 .reviewBtn {
   padding: 2px 8px;
@@ -127,7 +137,9 @@
   font-weight: 600;
   cursor: pointer;
 }
-.reviewBtn:hover { background: #0369a1; }
+.reviewBtn:hover {
+  background: #0369a1;
+}
 
 .dismissBtn {
   background: transparent;
@@ -137,4 +149,6 @@
   cursor: pointer;
   padding: 2px 4px;
 }
-.dismissBtn:hover { color: #f87171; }
+.dismissBtn:hover {
+  color: #f87171;
+}

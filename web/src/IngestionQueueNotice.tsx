@@ -18,13 +18,18 @@ export function IngestionQueueNotice({
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   // 진행 중인 작업과 완료된 작업 개수 계산
-  const activeCount = tasks.filter((t) => t.status === "pending" || t.status === "processing").length;
+  const activeCount = tasks.filter(
+    (t) => t.status === "pending" || t.status === "processing",
+  ).length;
   const completedCount = tasks.filter((t) => t.status === "completed").length;
 
   // 바깥 클릭 시 드롭다운 닫기
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(e.target as Node)
+      ) {
         setIsOpen(false);
       }
     };
@@ -68,17 +73,31 @@ export function IngestionQueueNotice({
                 <div className={styles.taskTitle}>{task.title}</div>
                 <div className={styles.taskFooter}>
                   <div>
-                    {task.status === "pending" && <span className={styles.statusPending}>대기 중...</span>}
-                    {task.status === "processing" && <span className={styles.statusProcessing}>추출 분석 중...</span>}
+                    {task.status === "pending" && (
+                      <span className={styles.statusPending}>대기 중...</span>
+                    )}
+                    {task.status === "processing" && (
+                      <span className={styles.statusProcessing}>
+                        추출 분석 중...
+                      </span>
+                    )}
                     {task.status === "completed" && (
                       <span className={styles.statusCompleted}>
                         완료 (노드 {task.node_count}개)
                       </span>
                     )}
-                    {task.status === "failed" && <span className={styles.statusFailed}>실패</span>}
+                    {task.status === "failed" && (
+                      <span className={styles.statusFailed}>실패</span>
+                    )}
                   </div>
 
-                  <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "6px",
+                      alignItems: "center",
+                    }}
+                  >
                     {task.status === "completed" && (
                       <button
                         type="button"

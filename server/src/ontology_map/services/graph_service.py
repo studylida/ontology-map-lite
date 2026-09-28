@@ -17,39 +17,95 @@ def get_node_by_id(session: Session, node_id: int) -> Optional[Node]:
     return session.execute(stmt).scalar_one_or_none()
 
 
-def get_node_subgraph(session: Session, node_id: int) -> dict:
-    """특정 노드 중심 1-hop 서브그래프(연결된 노드 및 엣지)를 반환합니다."""
-    
-    # 1. 중심 노드 조회
+def get_node_subgraph(
+    session: Session,
+    node_id: int,
+    max_hops: int = 4,
+    hop_limit: Optional[int] = 60,
+) -> dict:
+    """특정 노드 중심 1~4 hop 서브그래프를 계층(Tier)과 함께 BFS로 계산하여 반환합니다."""
     center_node = get_node_by_id(session, node_id)
     if not center_node:
-        return {"center_node": None, "nodes": [], "edges": []}
+        return {
+            "center_node_id": None,
+            "nodes": [],
+            "edges": [],
+            "has_omitted": False,
+            "omitted_count": 0,
+        }
 
-    # 2. 중심 노드와 연결된 모든 Edge 조회 (출발 또는 도착이 node_id인 경우)
-    # [빈칸 C]: Edge.source_node_id 또는 Edge.target_node_id가 node_id와 같은 조건을 or_() 안에 채워보세요.
-    stmt_edges = (
-        select(Edge)
-        .options(
-            joinedload(Edge.relation),
-            joinedload(Edge.source_node).joinedload(Node.classification),
-            joinedload(Edge.target_node).joinedload(Node.classification),
-        )
-        .where(
-            or_(
-                Edge.source_node_id==node_id,  # 출발지가 중심 노드인 경우
-                Edge.target_node_id==node_id   # 도착지가 중심 노드인 경우
+    visited_tiers: dict[int, str] = {center_node.id: "CENTER"}
+    nodes_by_id: dict[int, Node] = {center_node.id: center_node}
+
+    current_hop_ids = {center_node.id}
+    tier_names = {1: "DIRECT", 2: "TWO_HOP", 3: "THREE_HOP", 4: "AMBIENT"}
+    total_omitted_count = 0
+
+    # 1. 너비 우선 탐색 (BFS)으로 1-Hop(DIRECT) ~ 4-Hop(AMBIENT) 이웃 수집
+    for hop in range(1, max_hops + 1):
+        if not current_hop_ids:
+            break
+
+        stmt_edges = (
+            select(Edge)
+            .options(
+                joinedload(Edge.relation),
+                joinedload(Edge.source_node).joinedload(Node.classification),
+                joinedload(Edge.target_node).joinedload(Node.classification),
+            )
+            .where(
+                or_(
+                    Edge.source_node_id.in_(current_hop_ids),
+                    Edge.target_node_id.in_(current_hop_ids),
+                )
             )
         )
+        edges = session.execute(stmt_edges).scalars().all()
+
+        next_hop_dict: dict[int, Node] = {}
+        for e in edges:
+            other_id = e.target_node_id if e.source_node_id in current_hop_ids else e.source_node_id
+            other_node = e.target_node if e.source_node_id in current_hop_ids else e.source_node
+
+            if other_id not in visited_tiers and other_id not in next_hop_dict:
+                next_hop_dict[other_id] = other_node
+
+        tier_name = tier_names.get(hop, "AMBIENT")
+        total_candidates = len(next_hop_dict)
+
+        # 상한선이 지정되어 있고 초과할 때만 안전하게 조절
+        if hop_limit is not None and total_candidates > hop_limit:
+            selected_items = list(next_hop_dict.items())[:hop_limit]
+            total_omitted_count += total_candidates - hop_limit
+        else:
+            selected_items = list(next_hop_dict.items())
+
+        current_hop_ids = set()
+        for oid, onode in selected_items:
+            visited_tiers[oid] = tier_name
+            nodes_by_id[oid] = onode
+            current_hop_ids.add(oid)
+
+    # 2. 수집된 모든 노드 간의 상호 연결 엣지 조회
+    all_node_ids = set(nodes_by_id.keys())
+    stmt_all_edges = (
+        select(Edge)
+        .options(joinedload(Edge.relation))
+        .where(
+            Edge.source_node_id.in_(all_node_ids),
+            Edge.target_node_id.in_(all_node_ids),
+        )
     )
-    edges = session.execute(stmt_edges).scalars().all()
+    all_edges = session.execute(stmt_all_edges).scalars().all()
 
-    # 3. 연결된 모든 이웃 노드들을 중복 없이 모으기
-    connected_nodes = {center_node.id: center_node}
     edge_list = []
+    tier_rank = {"CENTER": 0, "DIRECT": 1, "TWO_HOP": 2, "THREE_HOP": 3, "AMBIENT": 4}
+    inv_rank = {0: "DIRECT", 1: "DIRECT", 2: "TWO_HOP", 3: "THREE_HOP", 4: "AMBIENT"}
 
-    for edge in edges:
-        connected_nodes[edge.source_node_id] = edge.source_node
-        connected_nodes[edge.target_node_id] = edge.target_node
+    for edge in all_edges:
+        s_tier = visited_tiers.get(edge.source_node_id, "DIRECT")
+        t_tier = visited_tiers.get(edge.target_node_id, "DIRECT")
+        edge_tier_val = max(tier_rank.get(s_tier, 1), tier_rank.get(t_tier, 1))
 
         edge_list.append({
             "id": edge.id,
@@ -57,7 +113,8 @@ def get_node_subgraph(session: Session, node_id: int) -> dict:
             "target_node_id": edge.target_node_id,
             "relation_code": edge.relation.code,
             "relation_name": edge.relation.display_name,
-            "properties": edge.properties,
+            "properties": edge.properties or {},
+            "tier": inv_rank.get(edge_tier_val, "DIRECT"),
         })
 
     node_list = [
@@ -67,13 +124,16 @@ def get_node_subgraph(session: Session, node_id: int) -> dict:
             "classification_code": n.classification.code,
             "classification_name": n.classification.display_name,
             "description": n.description,
-            "properties": n.properties,
+            "properties": n.properties or {},
+            "tier": visited_tiers.get(n.id, "DIRECT"),
         }
-        for n in connected_nodes.values()
+        for n in nodes_by_id.values()
     ]
 
     return {
         "center_node_id": center_node.id,
         "nodes": node_list,
         "edges": edge_list,
+        "has_omitted": total_omitted_count > 0,
+        "omitted_count": total_omitted_count,
     }
