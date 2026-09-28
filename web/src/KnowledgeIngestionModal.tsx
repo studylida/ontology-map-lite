@@ -194,10 +194,8 @@ export function KnowledgeIngestionModal({
       }
 
       onClose();
-      // 생성된 노드가 있으면 서브그래프 로딩 유발
-      if (res.nodes_created > 0) {
-        onIngestionSuccess(0);
-      }
+      // 생성된 대표 노드 ID를 전달하여 서브그래프 자동 전환 및 이동 유발
+      onIngestionSuccess(res.primary_node_id ?? 0);
     } catch (err: any) {
       alert(err.message ?? "지식그래프 적재 실패");
     } finally {

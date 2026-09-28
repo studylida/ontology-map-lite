@@ -107,10 +107,13 @@ def process_intake(session: Session, payload: Any) -> dict[str, Any]:
                 session.add(new_edge)
                 edges_created_count += 1
 
+    primary_node_id = list(node_name_map.values())[0].id if node_name_map else None
+
     return {
         "status": "success",
         "source_project": payload.source_project,
         "document_id": doc.id if doc else None,
+        "primary_node_id": primary_node_id,
         "nodes_created": len(payload.nodes),
         "edges_created": edges_created_count,
         "claims_created": claims_created_count,

@@ -40,6 +40,7 @@ class IntakeResponse(BaseModel):
     status: str = "success"
     source_project: str
     document_id: Optional[int] = None
+    primary_node_id: Optional[int] = None
     nodes_created: int
     edges_created: int
     claims_created: int

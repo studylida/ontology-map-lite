@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     source_processing_workers: int = Field(default=4, ge=1, le=4)
     provider_min_interval_seconds: float = Field(default=0.13, gt=0)
 
+    # API Keys (Loaded securely via dotenv or OS environment)
+    openai_api_key: str | None = Field(default=None, validation_alias="OPENAI_API_KEY")
+    jev_api_key: str | None = Field(default=None, validation_alias="JEV_API_KEY")
+
     @model_validator(mode="after")
     def validate_source_processing(self) -> "Settings":
         if self.source_processing_enabled and not self.demo_unbounded_provider:

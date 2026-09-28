@@ -1,7 +1,7 @@
 // web/src/App.tsx
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { dismissAgentTask, fetchAgentTasks, fetchSubgraph } from "./api";
-import { GraphCanvas } from "./GraphCanvas";
+import { GraphCanvas, type GraphCanvasHandle } from "./GraphCanvas";
 import { SidePanel } from "./SidePanel";
 import { NodeSearch } from "./NodeSearch";
 import { KnowledgePopover } from "./KnowledgePopover";
@@ -11,6 +11,8 @@ import type { ExtractionTaskSummary, GraphEdge, GraphNode, NodeSearchItem } from
 import styles from "./App.module.css";
 
 export function App() {
+  const canvasRef = useRef<GraphCanvasHandle | null>(null);
+
   // 1. 기본 3D 그래프 상태
   const [centerNodeId, setCenterNodeId] = useState<number>(5);
   const [nodes, setNodes] = useState<GraphNode[]>([]);
@@ -62,18 +64,14 @@ export function App() {
     return () => clearInterval(timer);
   }, []);
 
-  // 5. 인터랙션 핸들러들
-  const handleNodeClick = (node: GraphNode) => {
+  // 5. 인터랙션 핸들러들 (useCallback으로 메모이제이션하여 불필요한 자식 리렌더링 차단)
+  const handleNodeClick = useCallback((node: GraphNode) => {
     setSelectedNode(node);
-  };
+  }, []);
 
-  const handleSelectSearchedNode = (item: NodeSearchItem) => {
+  const handleSelectSearchedNode = useCallback((item: NodeSearchItem) => {
     setCenterNodeId(item.id);
-    const existing = nodes.find((n) => n.id === item.id);
-    if (existing) {
-      setSelectedNode(existing);
-    }
-  };
+  }, []);
 
   // 모달 열기 핸들러들
   const handleOpenInputModal = () => {
@@ -98,8 +96,12 @@ export function App() {
   };
 
   // HITL 검토 후 지식그래프 적재 성공 시
-  const handleIngestionSuccess = () => {
-    loadGraph(centerNodeId);
+  const handleIngestionSuccess = (newNodeId?: number) => {
+    if (newNodeId && newNodeId > 0) {
+      setCenterNodeId(newNodeId);
+    } else {
+      loadGraph(centerNodeId);
+    }
   };
 
   return (
@@ -121,6 +123,16 @@ export function App() {
           onClick={handleOpenInputModal}
         >
           <span>✨</span> + 지식 추가
+        </button>
+
+        {/* 전체화면 맞춤 정렬 버튼 */}
+        <button
+          type="button"
+          className={styles.fitBtn}
+          onClick={() => canvasRef.current?.fitToView()}
+          title="지식맵 전체를 화면에 맞게 정렬합니다"
+        >
+          <span>⤢</span> 전체화면 맞춤
         </button>
 
         {/* 백그라운드 대기열 알림 뱃지 */}
@@ -155,6 +167,7 @@ export function App() {
         {error && <div className={styles.errorMessage}>오류 발생: {error}</div>}
 
         <GraphCanvas
+          ref={canvasRef}
           nodes={nodes}
           edges={edges}
           selectedNodeId={selectedNode?.id ?? null}
@@ -178,7 +191,6 @@ export function App() {
           reviewTaskId={reviewTaskId}
           onClose={() => setIsModalOpen(false)}
           onTaskEnqueued={() => {
-            // 즉시 대기열 목록을 새로고침
             fetchAgentTasks().then(setTasks).catch(() => {});
           }}
           onIngestionSuccess={handleIngestionSuccess}

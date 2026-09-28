@@ -56,6 +56,27 @@
   box-shadow: 0 0 12px rgba(56, 189, 248, 0.4);
 }
 
+.fitBtn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 11px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  color: #e2e8f0;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.fitBtn:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.4);
+}
+
 .quickNav {
   display: flex;
   align-items: center;

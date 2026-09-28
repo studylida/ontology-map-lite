@@ -8,6 +8,7 @@ from typing import Any
 import httpx
 
 from ontology_map.schemas import IntakeClaim, IntakeEdge, IntakeNode, IntakePayload
+from ontology_map.settings import get_settings
 
 # 기본 설정 (환경변수로 오버라이드 가능)
 DEFAULT_OPENAI_BASE_URL = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
@@ -47,7 +48,8 @@ def extract_ontology_from_text(
     model: str | None = None,
 ) -> IntakePayload:
     """문서 텍스트를 LLM에 전달하여 구조화된 IntakePayload로 추출합니다."""
-    key = api_key or os.environ.get("OPENAI_API_KEY", "")
+    settings = get_settings()
+    key = api_key or settings.openai_api_key or os.environ.get("OPENAI_API_KEY", "")
     url = (base_url or DEFAULT_OPENAI_BASE_URL).rstrip("/")
     target_model = model or DEFAULT_MODEL
 

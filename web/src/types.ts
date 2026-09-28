@@ -111,6 +111,7 @@ export interface IntakeResponse {
   status: string;
   source_project: string;
   document_id?: number | null;
+  primary_node_id?: number | null;
   nodes_created: number;
   edges_created: number;
   claims_created: number;

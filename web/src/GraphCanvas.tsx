@@ -1,10 +1,18 @@
 // web/src/GraphCanvas.tsx
-import { useEffect, useRef } from "react";
+import { useEffect, useImperativeHandle, useRef, type Ref } from "react";
 import ForceGraph3D, { type ForceGraph3DInstance } from "3d-force-graph";
 import type { GraphEdge, GraphNode } from "./types";
 import styles from "./GraphCanvas.module.css";
 
+export interface GraphCanvasHandle {
+  zoomIn: () => void;
+  zoomOut: () => void;
+  fitToView: () => void;
+  recenter: () => void;
+}
+
 interface GraphCanvasProps {
+  ref?: Ref<GraphCanvasHandle | null>;
   nodes: GraphNode[];
   edges: GraphEdge[];
   selectedNodeId: number | null;
@@ -12,6 +20,7 @@ interface GraphCanvasProps {
 }
 
 export function GraphCanvas({
+  ref,
   nodes,
   edges,
   selectedNodeId,
@@ -20,29 +29,99 @@ export function GraphCanvas({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const graphRef = useRef<ForceGraph3DInstance | null>(null);
 
-  // 1. 3D 그래프 인스턴스 초기화 (최초 마운트 시 1회)
+  // 리렌더링 시에도 함수 인스턴스를 유지하여 캔버스 재생성을 방지
+  const onNodeClickRef = useRef(onNodeClick);
+  useEffect(() => {
+    onNodeClickRef.current = onNodeClick;
+  }, [onNodeClick]);
+
+  const selectedNodeIdRef = useRef(selectedNodeId);
+  useEffect(() => {
+    selectedNodeIdRef.current = selectedNodeId;
+  }, [selectedNodeId]);
+
+  // 플로팅 컨트롤에서 조작할 수 있는 핸들러 제공
+  useImperativeHandle(ref, () => ({
+    zoomIn: () => {
+      if (!graphRef.current) return;
+      const cam = graphRef.current.camera();
+      graphRef.current.cameraPosition(
+        { x: cam.position.x, y: cam.position.y, z: cam.position.z * 0.75 },
+        undefined,
+        400
+      );
+    },
+    zoomOut: () => {
+      if (!graphRef.current) return;
+      const cam = graphRef.current.camera();
+      graphRef.current.cameraPosition(
+        { x: cam.position.x, y: cam.position.y, z: cam.position.z * 1.35 },
+        undefined,
+        400
+      );
+    },
+    fitToView: () => {
+      if (!graphRef.current) return;
+      graphRef.current.zoomToFit(600, 60);
+    },
+    recenter: () => {
+      if (!graphRef.current || !selectedNodeIdRef.current) return;
+      const currentNodes = (graphRef.current.graphData().nodes || []) as any[];
+      const target = currentNodes.find((n) => n.id === selectedNodeIdRef.current);
+      if (target && typeof target.x === "number") {
+        const cam = graphRef.current.camera();
+        graphRef.current.cameraPosition(
+          { x: target.x, y: target.y, z: cam.position.z },
+          { x: target.x, y: target.y, z: 0 },
+          600
+        );
+      }
+    },
+  }));
+
+  // 1. 3D 그래프 인스턴스 초기화 (마운트 시 단 1회만 실행 - 5초 소멸 원천 봉쇄)
   useEffect(() => {
     if (!containerRef.current) return;
 
     const graph = new ForceGraph3D(containerRef.current)
       .backgroundColor("#0a0a0c")
+      .numDimensions(2) // [2.5D 평면 레이아웃] Z축 허공 이탈 완전 차단
       .nodeLabel("name")
       .linkLabel((link: any) => link.label)
       .nodeAutoColorBy("classification_id")
-      .nodeRelSize(6)
-      .linkOpacity(0.3)
+      .nodeRelSize(7)
+      .linkOpacity(0.4)
       .linkWidth(1.5)
       .linkDirectionalParticles(2)
-      .linkDirectionalParticleWidth(1.2)
+      .linkDirectionalParticleWidth(1.4)
+      .nodeVal((node: any) => (node.id === selectedNodeIdRef.current ? 15 : 8))
       .onNodeClick((nodeObj) => {
-        // [빈칸 1] 3d-force-graph에서 클릭된 객체를 GraphNode 타입으로 부모에 전달
-        const clickedNode = nodeObj as GraphNode;
-        onNodeClick(clickedNode);
+        onNodeClickRef.current(nodeObj as GraphNode);
       });
+
+    // OrbitControls: 회전 잠금 및 평면 이동(Pan) & 줌(Zoom) 고정
+    const controls = graph.controls();
+    if (controls) {
+      controls.enableRotate = false; // 평면 지도로서 3D 회전을 잠가 시야 이탈 방지
+      controls.enablePan = true;
+      controls.enableZoom = true;
+      controls.screenSpacePanning = true;
+      controls.mouseButtons = {
+        LEFT: 2,   // THREE.MOUSE.PAN
+        MIDDLE: 1, // THREE.MOUSE.DOLLY
+        RIGHT: 2,  // 우클릭도 PAN 지원
+      };
+    }
+
+    // 카메라 원거리 클리핑 확장
+    const camera = graph.camera();
+    if (camera && "far" in camera) {
+      camera.far = 10000;
+      camera.updateProjectionMatrix();
+    }
 
     graphRef.current = graph;
 
-    // 윈도우 리사이즈 대응
     const handleResize = () => {
       if (containerRef.current && graphRef.current) {
         graphRef.current.width(containerRef.current.clientWidth);
@@ -54,24 +133,30 @@ export function GraphCanvas({
     return () => {
       window.removeEventListener("resize", handleResize);
       if (graphRef.current) {
-        // 인스턴스 정리
         graphRef.current._destructor?.();
         graphRef.current = null;
       }
     };
-  }, [onNodeClick]);
+  }, []); // 의존성 빈 배열 []: 리렌더링 시 절대 파괴되지 않음
 
-  // 2. nodes, edges 또는 selectedNodeId 변경 시 그래프 데이터 갱신
+  // 2. nodes, edges 변경 시 데이터 반영 (시뮬레이션 좌표 보존)
   useEffect(() => {
     if (!graphRef.current) return;
 
-    // 3d-force-graph 형식에 맞춰 매핑: source/target은 id를 가리킴
+    const currentNodes = (graphRef.current.graphData().nodes || []) as any[];
+    const coordMap = new Map(
+      currentNodes.map((n) => [n.id, { x: n.x, y: n.y, z: 0, vx: n.vx, vy: n.vy }])
+    );
+
     const formattedData = {
-      nodes: nodes.map((n) => ({
-        ...n,
-        // 선택된 노드는 크기를 더 크게 강조
-        val: n.id === selectedNodeId ? 14 : 7,
-      })),
+      nodes: nodes.map((n) => {
+        const prev = coordMap.get(n.id);
+        return {
+          ...n,
+          val: n.id === selectedNodeIdRef.current ? 15 : 8,
+          ...(prev ? prev : {}),
+        };
+      }),
       links: edges.map((e) => ({
         source: e.source_node_id,
         target: e.target_node_id,
@@ -81,20 +166,33 @@ export function GraphCanvas({
 
     graphRef.current.graphData(formattedData);
 
-    // 선택된 노드가 있으면 카메라를 부드럽게 이동 (선택적)
-    if (selectedNodeId) {
-      const targetNode = formattedData.nodes.find((n) => n.id === selectedNodeId);
-      if (targetNode && (targetNode as any).x !== undefined) {
-        // 카메라 거리 조정
-        const distance = 120;
-        graphRef.current.cameraPosition(
-          { x: (targetNode as any).x, y: (targetNode as any).y, z: (targetNode as any).z + distance },
-          targetNode as any,
-          1000 // 1초 동안 부드럽게 전환
-        );
-      }
+    // 데이터가 처음 로드되었을 때 전체 화면 맞춤 1회 실행
+    if (nodes.length > 0 && currentNodes.length === 0) {
+      setTimeout(() => {
+        graphRef.current?.zoomToFit(600, 60);
+      }, 350);
     }
-  }, [nodes, edges, selectedNodeId]);
+  }, [nodes, edges]);
+
+  // 3. 선택된 노드 변경 시: 기존 줌 배율 유지한 채 중앙 슬라이드 이동
+  useEffect(() => {
+    if (!graphRef.current || !selectedNodeId) return;
+
+    graphRef.current.nodeVal((node: any) => (node.id === selectedNodeId ? 15 : 8));
+
+    const currentNodes = (graphRef.current.graphData().nodes || []) as any[];
+    const targetNode = currentNodes.find((n) => n.id === selectedNodeId);
+
+    if (targetNode && typeof targetNode.x === "number" && !Number.isNaN(targetNode.x)) {
+      const cam = graphRef.current.camera();
+      // Z 거리는 기존 줌 유지, X/Y만 부드럽게 슬라이드
+      graphRef.current.cameraPosition(
+        { x: targetNode.x, y: targetNode.y, z: cam.position.z },
+        { x: targetNode.x, y: targetNode.y, z: 0 },
+        800
+      );
+    }
+  }, [selectedNodeId]);
 
   return <div ref={containerRef} className={styles.canvasContainer} />;
 }
