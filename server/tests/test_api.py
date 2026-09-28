@@ -1,10 +1,10 @@
 """핵심 API 엔드포인트 통합 테스트."""
 
 from fastapi.testclient import TestClient
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
-from ontology_map.db.schema import Classification
+from ontology_map.db.schema import Classification, Node
 
 
 def test_health(client: TestClient):
@@ -71,3 +71,56 @@ def test_create_and_resolve_node(client: TestClient, db_session: Session):
     }
     res_bad = client.post("/api/v1/nodes", json=bad_payload)
     assert res_bad.status_code == 400
+
+
+def test_get_node_subgraph(client: TestClient, db_session: Session):
+    """1-hop 서브그래프 조회 API 규격 검증 (3D GraphCanvas 연동)."""
+    # 1. 존재하지 않는 노드 ID로 요청 시 404 Not Found 확인
+    max_id = db_session.execute(select(func.max(Node.id))).scalar() or 0
+    non_existent_id = max_id + 1
+
+    res_404 = client.get(f"/api/v1/nodes/{non_existent_id}/graph")
+    assert res_404.status_code == 404
+
+    # 2. DB에 존재하는 노드 하나 조회
+    stmt = select(Node).limit(1)
+    existing_node = db_session.execute(stmt).scalars().first()
+
+    # 3. 노드가 존재할 때 서브그래프 데이터 계약(Contract) 검증
+    if existing_node:
+        res = client.get(f"/api/v1/nodes/{existing_node.id}/graph")
+        assert res.status_code == 200
+        data = res.json()
+
+        # [빈칸 A]: 3D 그래프 렌더링에 필수적인 3개 키가 data 딕셔너리에 포함되어 있는지 검증하세요.
+        # (힌트: 중심 노드 'center_node', 노드 목록 'nodes', 연결선 목록 'edges')
+        assert "center_node_id" in data
+        assert "nodes" in data
+        assert "edges" in data
+        assert data["center_node_id"] == existing_node.id
+
+
+def test_get_node_insights(client: TestClient, db_session: Session):
+    """노드 AI 종합 인사이트 & Q&A 조회 API 규격 검증 (SidePanel 연동)."""
+    # 1. 존재하지 않는 노드 ID로 요청 시 404 Not Found 확인
+    max_id = db_session.execute(select(func.max(Node.id))).scalar() or 0
+    non_existent_id = max_id + 1
+
+    res_404 = client.get(f"/api/v1/nodes/{non_existent_id}/graph")
+    assert res_404.status_code == 404
+
+    # 2. DB에 존재하는 노드 하나 조회
+    stmt = select(Node).limit(1)
+    existing_node = db_session.execute(stmt).scalars().first()
+
+    # 3. 노드가 존재할 때 사이드패널 데이터 계약 검증
+    if existing_node:
+        res = client.get(f"/api/v1/nodes/{existing_node.id}/insights")
+        assert res.status_code == 200
+        data = res.json()
+
+        # [빈칸 B]: SidePanel에서 요약 카드와 Q&A 아코디언을 그리기 위해 필요한 
+        #           두 가지 핵심 키('insight', 'qa_pairs')가 포함되어 있는지 검증하세요.
+        assert "insight" in data
+        assert "qa_pairs" in data
+        assert data["node_id"] == existing_node.id
