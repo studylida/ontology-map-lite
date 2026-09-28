@@ -11,6 +11,7 @@ from ontology_map.db.session import open_session
 from ontology_map.services.entity_resolution import resolve_or_create_node
 from ontology_map.services.graph_service import get_node_by_id, get_node_subgraph
 from ontology_map.services.insight_service import get_node_insight, get_node_qa_pairs
+from ontology_map.services.intake_service import process_intake
 
 router = APIRouter(prefix="/api/v1")
 
@@ -33,7 +34,55 @@ class NodeCreateRequest(BaseModel):
     description: Optional[str] = None
     properties: Optional[dict[str, Any]] = None
 
+# --- Response / Request Schemas 구역에 추가 ---
 
+class IntakeNode(BaseModel):
+    name: str = Field(..., min_length=1, description="엔티티 이름 (필수)")
+    # 분류 코드가 없으면 기본값으로 'GENERAL'을 부여합니다.
+    classification: str = Field(default="GENERAL", description="온톨로지 분류 (기본값 GENERAL)")
+    description: Optional[str] = None
+    properties: Optional[dict[str, Any]] = None
+
+
+class IntakeEdge(BaseModel):
+    source_name: str = Field(..., description="출발 노드 이름 (필수)")
+    target_name: str = Field(..., description="도착 노드 이름 (필수)")
+    # 관계명이 없으면 기본값으로 'RELATED_TO'를 부여합니다.
+    relation: str = Field(default="RELATED_TO", description="관계 유형 (기본값 RELATED_TO)")
+    properties: Optional[dict[str, Any]] = None
+
+
+class IntakeClaim(BaseModel):
+    quote: str = Field(..., description="원천 인용문 또는 엑셀 셀 위치 (필수)")
+    claim_text: Optional[str] = None
+    confidence: Optional[float] = 1.0
+
+
+class IntakePayload(BaseModel):
+    """동기 프로젝트들의 이질적인 데이터를 유연하게 수용하는 최상위 DTO."""
+    source_project: str = Field(..., description="출처 식별자 (예: excel-agent, news-agent, gov-insight)")
+    document_title: Optional[str] = None
+    document_content: Optional[str] = None
+    document_uri: Optional[str] = None
+    
+    # [빈칸 1]: 노드 목록을 받는 필드입니다. 없을 경우 빈 리스트([])를 기본값으로 갖도록 완성해 보세요.
+    nodes: list[IntakeNode] = Field(default_factory=list, description="엔티티 노드 목록")
+
+    # [빈칸 2]: 엣지 목록을 받는 필드입니다. 없을 경우 빈 리스트([])를 기본값으로 갖도록 완성해 보세요.
+    edges: list[IntakeEdge] = Field(default_factory=list, description="관계 엣지 목록")
+
+    claims: list[IntakeClaim] = Field(default_factory=list)
+    raw_metadata: Optional[dict[str, Any]] = None
+
+
+class IntakeResponse(BaseModel):
+    """적재 성공 후 클라이언트에게 반환할 요약 결과."""
+    status: str = "success"
+    source_project: str
+    document_id: Optional[int] = None
+    nodes_created: int
+    edges_created: int
+    claims_created: int
 # --- Endpoints ---
 
 @router.get("/health", response_model=HealthResponse)
@@ -113,3 +162,14 @@ def get_insights(
             for qa in qa_pairs
         ],
     }
+
+
+@router.post("/intake", response_model=IntakeResponse)
+def intake_external_data(
+    payload: IntakePayload,
+    session: Session = Depends(open_session),
+):
+    """타 프로젝트 분석 산출물을 8개 테이블로 자동 보정·적재하는 API."""
+    result = process_intake(session=session, payload=payload)
+    session.commit()
+    return result
