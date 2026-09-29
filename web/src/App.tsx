@@ -152,12 +152,13 @@ export function App() {
     }
   };
 
-  // HITL 검토 후 지식그래프 적재 성공 시
+  // HITL 검토 후 지식그래프 적재 성공 시 (M4.4: 중심 ID가 같아도 graph와 details를 항상 재조회)
   const handleIngestionSuccess = (newNodeId?: number) => {
-    if (newNodeId && newNodeId > 0) {
-      setCenterNodeId(newNodeId);
-    } else {
-      loadGraph(centerNodeId);
+    const targetId = newNodeId && newNodeId > 0 ? newNodeId : centerNodeId;
+    setCenterNodeId(targetId);
+    loadGraph(targetId, false);
+    if (selectedNode && selectedNode.id === targetId) {
+      setSelectedNode({ ...selectedNode });
     }
   };
 

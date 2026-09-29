@@ -87,6 +87,54 @@
   line-height: 1.6;
 }
 
+.insightPartsContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.insightCard {
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  border-left: 3px solid #38bdf8;
+  border-radius: 6px;
+  padding: 10px 12px;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.insightCard:hover {
+  border-color: rgba(56, 189, 248, 0.4);
+  background: rgba(15, 23, 42, 0.7);
+}
+
+.insightCardHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  font-weight: 600;
+  font-size: 12px;
+  color: #7dd3fc;
+}
+
+.insightIcon {
+  font-size: 13px;
+}
+
+.insightTitle {
+  letter-spacing: -0.2px;
+}
+
+.insightContent {
+  font-size: 12px;
+  line-height: 1.55;
+  color: #e2e8f0;
+  margin: 0;
+  white-space: pre-line;
+  word-break: keep-all;
+}
+
 .tags {
   display: flex;
   flex-wrap: wrap;

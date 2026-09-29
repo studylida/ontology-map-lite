@@ -101,23 +101,32 @@ export interface NodeSearchItem {
 export type TaskStatus = "pending" | "processing" | "completed" | "failed";
 
 export interface IntakeNode {
+  ref_id?: string;
   name: string;
   classification?: string;
   description?: string;
   properties?: Record<string, unknown>;
+  existing_node_id?: number | null;
 }
 
 export interface IntakeEdge {
+  source_ref?: string;
+  target_ref?: string;
   source_name: string;
   target_name: string;
   relation?: string;
+  claim_ref?: string;
+  claim_refs?: string[];
   properties?: Record<string, unknown>;
 }
 
 export interface IntakeClaim {
+  ref_id?: string;
   quote: string;
   claim_text?: string;
   confidence?: number;
+  start_offset?: number | null;
+  end_offset?: number | null;
 }
 
 export interface IntakePayload {
@@ -143,6 +152,8 @@ export interface IntakeResponse {
   nodes_created: number;
   edges_created: number;
   claims_created: number;
+  duplicate_claims_reused?: number;
+  affected_node_ids?: number[];
 }
 
 export interface ExtractionTaskSummary {

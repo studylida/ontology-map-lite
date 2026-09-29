@@ -9,6 +9,76 @@ interface SidePanelProps {
   onClose: () => void;
 }
 
+interface InsightPart {
+  title?: string;
+  icon: string;
+  content: string;
+}
+
+function parseInsightParts(text: string): InsightPart[] {
+  if (!text) return [];
+
+  // 1) 대괄호 [파트제목] 기준 분할
+  const bracketRegex = /\[(.*?)\]\s*([\s\S]*?)(?=(?:\[.*?\])|$)/g;
+  const matches = [...text.matchAll(bracketRegex)];
+
+  if (matches.length > 0) {
+    return matches.map((m) => {
+      const rawTitle = m[1].trim();
+      let icon = "💡";
+      if (
+        rawTitle.includes("위상") ||
+        rawTitle.includes("전략") ||
+        rawTitle.includes("성격") ||
+        rawTitle.includes("개요")
+      ) {
+        icon = "🎯";
+      } else if (
+        rawTitle.includes("생태계") ||
+        rawTitle.includes("기술") ||
+        rawTitle.includes("파급") ||
+        rawTitle.includes("혁신")
+      ) {
+        icon = "⚡";
+      } else if (
+        rawTitle.includes("한계") ||
+        rawTitle.includes("불확실") ||
+        rawTitle.includes("과제") ||
+        rawTitle.includes("리스크")
+      ) {
+        icon = "⚠️";
+      }
+      return {
+        title: rawTitle,
+        icon,
+        content: m[2].trim(),
+      };
+    });
+  }
+
+  // 2) 문단 분할 (\n\n)
+  const paragraphs = text
+    .split(/\n\s*\n/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  if (paragraphs.length > 1) {
+    return paragraphs.map((p, idx) => ({
+      title: `분석 관점 0${idx + 1}`,
+      icon: idx === 0 ? "🎯" : idx === 1 ? "⚡" : "💡",
+      content: p,
+    }));
+  }
+
+  // 3) 단일 문단
+  return [
+    {
+      icon: "💡",
+      content: text.trim(),
+    },
+  ];
+}
+
 export function SidePanel({ selectedNode, onClose }: SidePanelProps) {
   const [data, setData] = useState<NodeDetailsResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
@@ -47,7 +117,12 @@ export function SidePanel({ selectedNode, onClose }: SidePanelProps) {
 
   const propEntries = data?.properties
     ? Object.entries(data.properties).filter(
-        ([_, v]) => v !== null && v !== undefined && v !== "",
+        ([k, v]) =>
+          k !== "claim_ids" &&
+          !k.startsWith("_") &&
+          v !== null &&
+          v !== undefined &&
+          v !== "",
       )
     : [];
 
@@ -109,11 +184,11 @@ export function SidePanel({ selectedNode, onClose }: SidePanelProps) {
               )}
             </section>
 
-            {/* 원천 근거 (Claims) 아코디언 드롭아웃 */}
+            {/* 개요 근거 (Claims) 아코디언 (기본 접힘) */}
             <section className={styles.section}>
-              <details className={styles.claimsAccordion} open>
+              <details className={styles.claimsAccordion}>
                 <summary className={styles.claimsSummary}>
-                  <span>📄 확인된 원천 근거 ({data.claims.length}건)</span>
+                  <span>📄 개요 근거 ({data.claims.length}건)</span>
                 </summary>
                 <div className={styles.claimsList}>
                   {data.claims.length > 0 ? (
@@ -135,51 +210,64 @@ export function SidePanel({ selectedNode, onClose }: SidePanelProps) {
                     ))
                   ) : (
                     <div className={styles.emptyHint}>
-                      연계된 원천 인용 근거가 없습니다.
+                      연계된 개요 근거가 없습니다.
                     </div>
                   )}
                 </div>
               </details>
             </section>
 
-            {/* AI 분석 요약 */}
-            {(data.recent_history_summary ||
-              data.overall_insight ||
-              (data.issues && data.issues.length > 0)) && (
-              <section className={styles.section}>
-                <h3>AI 분석 요약</h3>
-                {data.recent_history_summary && (
-                  <p className={styles.summaryText}>
-                    {data.recent_history_summary}
+            {/* AI 분석 요약 (null이어도 기본 골격 항상 노출) */}
+            <section className={styles.section}>
+              <h3>AI 분석 요약</h3>
+              {data.recent_history_summary && (
+                <p className={styles.summaryText}>
+                  {data.recent_history_summary}
+                </p>
+              )}
+              {data.overall_insight && (
+                <div className={styles.insightPartsContainer}>
+                  {parseInsightParts(data.overall_insight).map((part, idx) => (
+                    <div key={idx} className={styles.insightCard}>
+                      {part.title && (
+                        <div className={styles.insightCardHeader}>
+                          <span className={styles.insightIcon}>{part.icon}</span>
+                          <span className={styles.insightTitle}>{part.title}</span>
+                        </div>
+                      )}
+                      <p className={styles.insightContent}>{part.content}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {data.issues && data.issues.length > 0 && (
+                <div className={styles.tags}>
+                  {data.issues.map((issue, idx) => {
+                    const text =
+                      typeof issue === "string"
+                        ? issue
+                        : (issue.title ?? JSON.stringify(issue));
+                    return (
+                      <span key={idx} className={styles.tag}>
+                        #{text}
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
+              {!data.recent_history_summary &&
+                !data.overall_insight &&
+                (!data.issues || data.issues.length === 0) && (
+                  <p className={styles.emptyHint}>
+                    아직 등록된 AI 분석 요약이 없습니다.
                   </p>
                 )}
-                {data.overall_insight && (
-                  <div className={styles.insightBox}>
-                    {data.overall_insight}
-                  </div>
-                )}
-                {data.issues && data.issues.length > 0 && (
-                  <div className={styles.tags}>
-                    {data.issues.map((issue, idx) => {
-                      const text =
-                        typeof issue === "string"
-                          ? issue
-                          : (issue.title ?? JSON.stringify(issue));
-                      return (
-                        <span key={idx} className={styles.tag}>
-                          #{text}
-                        </span>
-                      );
-                    })}
-                  </div>
-                )}
-              </section>
-            )}
+            </section>
 
-            {/* 핵심 질문 & 답변 (Q&A) */}
-            {data.qa_pairs && data.qa_pairs.length > 0 && (
-              <section className={styles.section}>
-                <h3>핵심 질문 & 답변 ({data.qa_pairs.length})</h3>
+            {/* 핵심 질문 & 답변 (Q&A) (null이어도 기본 골격 항상 노출) */}
+            <section className={styles.section}>
+              <h3>핵심 질문 & 답변 ({data.qa_pairs ? data.qa_pairs.length : 0})</h3>
+              {data.qa_pairs && data.qa_pairs.length > 0 ? (
                 <div className={styles.qaList}>
                   {data.qa_pairs.map((qa) => (
                     <article key={qa.sequence} className={styles.qaCard}>
@@ -188,8 +276,12 @@ export function SidePanel({ selectedNode, onClose }: SidePanelProps) {
                     </article>
                   ))}
                 </div>
-              </section>
-            )}
+              ) : (
+                <p className={styles.emptyHint}>
+                  등록된 핵심 질문과 답변이 없습니다.
+                </p>
+              )}
+            </section>
           </>
         )}
       </div>
