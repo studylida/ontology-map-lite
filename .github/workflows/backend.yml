@@ -1,0 +1,90 @@
+name: Backend
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/backend.yml"
+      - "server/**"
+      - "compose.yaml"
+
+permissions:
+  contents: read
+
+jobs:
+  static:
+    name: Backend 정적 검사
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+        with:
+          version: "0.12.7"
+          python-version: "3.14.7"
+          enable-cache: true
+      - name: 의존성 설치
+        run: uv sync --project server --frozen
+      - name: Ruff
+        run: uv run --project server --frozen ruff check server
+      - name: 형식 검사
+        if: ${{ !cancelled() }}
+        run: uv run --project server --frozen ruff format --check server
+      - name: 타입 검사
+        if: ${{ !cancelled() }}
+        run: uv run --project server --frozen mypy --config-file server/pyproject.toml server/src/ontology_map
+
+  postgres:
+    name: Backend PostgreSQL 회귀 검사
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      COMPOSE_PROJECT_NAME: backend-test-${{ github.run_id }}-${{ github.run_attempt }}
+      POSTGRES_DB: ontology_map_backend_test
+      POSTGRES_USER: backend_test
+      POSTGRES_PORT: "127.0.0.1:55433"
+      ONTOLOGY_MAP_ENVIRONMENT: test
+      PYTHONPATH: ${{ github.workspace }}/server/src
+      # 테스트 픽스처의 HTTP 모킹이 누락되어도 외부 모델로 요청하지 않는다.
+      OPENAI_BASE_URL: http://127.0.0.1:1
+      OPENAI_API_KEY: ci-test-placeholder
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+        with:
+          version: "0.12.7"
+          python-version: "3.14.7"
+          enable-cache: true
+      - name: 의존성 설치
+        run: uv sync --project server --frozen
+      - name: 격리 DB의 일회성 인증 정보 준비
+        run: |
+          test_db_password="$(openssl rand -hex 24)"
+          echo "::add-mask::$test_db_password"
+          test_db_url="postgresql+psycopg://${POSTGRES_USER}:${test_db_password}@127.0.0.1:55433/${POSTGRES_DB}"
+          echo "::add-mask::$test_db_url"
+          {
+            echo "POSTGRES_PASSWORD=$test_db_password"
+            echo "ONTOLOGY_MAP_DATABASE_URL=$test_db_url"
+          } >> "$GITHUB_ENV"
+      - name: 격리 PostgreSQL 시작
+        run: docker compose up --wait --wait-timeout 120 db
+      - name: 현재 migration 적용
+        id: migration
+        working-directory: server
+        run: uv run --frozen alembic upgrade head
+      - name: DB와 모델 일치 검사
+        working-directory: server
+        run: uv run --frozen alembic check
+      - name: 현재 Backend 테스트
+        if: ${{ !cancelled() && steps.migration.outcome == 'success' }}
+        run: uv run --project server --frozen pytest -q server/tests
+      - name: lockfile 불변 검사
+        if: ${{ !cancelled() }}
+        run: git diff --exit-code -- server/pyproject.toml server/uv.lock
+      - name: 이번 실행의 격리 DB 정리
+        if: ${{ always() }}
+        run: docker compose down --volumes

@@ -3,8 +3,8 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
-from ontology_map.settings import get_settings
 from ontology_map.db.schema import Base
+from ontology_map.settings import get_settings
 
 target_metadata = Base.metadata
 
@@ -18,17 +18,6 @@ config.set_main_option(
 )
 
 
-def include_object(
-    _object: object,
-    name: str | None,
-    type_: str,
-    _reflected: bool,
-    _compare_to: object | None,
-) -> bool:
-    # PostgreSQL이 반사한 expression index는 metadata 객체와 직접 대응되지 않는다.
-    return not (type_ == "index" and name == "ix_node_search_document__fts")
-
-
 def run_migrations_offline() -> None:
     context.configure(
         url=config.get_main_option("sqlalchemy.url"),
@@ -37,7 +26,6 @@ def run_migrations_offline() -> None:
         dialect_opts={"paramstyle": "named"},
         compare_type=True,
         compare_server_default=True,
-        include_object=include_object,
     )
     with context.begin_transaction():
         context.run_migrations()
@@ -55,7 +43,6 @@ def run_migrations_online() -> None:
             target_metadata=target_metadata,
             compare_type=True,
             compare_server_default=True,
-            include_object=include_object,
         )
         with context.begin_transaction():
             context.run_migrations()

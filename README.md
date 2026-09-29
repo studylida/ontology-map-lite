@@ -50,6 +50,12 @@ uv run --project server --frozen python scripts/check_docs.py --check
 uv run --project server --frozen pytest -q scripts/test_check_docs.py
 ```
 
-모델을 변경했으면 `--write`로 스키마 참고 문서를 먼저 갱신한다. 검사는 선언된 스키마와 생성 문서의 일치, 저장소 내부 Markdown 링크, 존재하는 ADR의 메타데이터와 색인 관계를 확인한다. 실제 DB와 모델의 일치 여부를 검증하는 명령은 아니다.
+모델을 변경했으면 `--write`로 스키마 참고 문서를 먼저 갱신한다. 검사는 선언된 스키마와 생성 문서의 일치, 저장소 내부 Markdown 링크를 확인한다. 실제 DB와 모델의 일치 여부를 검증하는 명령은 아니다.
+
+## CI와 설정
+
+CI는 Backend와 Documentation으로 구성한다. Backend는 관련 서버·Compose·워크플로 변경 PR에서 정적 검사와 PostgreSQL 검사를 독립적으로 실행한다. Ruff·형식·mypy 검사는 기존 코드의 오류도 실패로 보고한다. PostgreSQL 검사는 실행별 독립 Compose 프로젝트에서 현재 마이그레이션 적용, `alembic check`, 현재 Backend 테스트를 실행하고 해당 실행의 DB만 정리한다. 테스트 환경은 `test`이며 실제 모델 키를 사용하지 않는다. Documentation은 모든 PR에서 스키마·링크 검사와 검사기의 회귀 테스트를 실행한다.
+
+서버 설정은 필수 DB URL·환경 구분과 선택적인 `OPENAI_API_KEY`를 사용한다. `OPENAI_BASE_URL`과 `OPENAI_MODEL`은 현재 서비스가 프로세스 환경변수에서 직접 읽는다. 사용하지 않는 옛 source-processing·provider-ledger·JEV 설정과 Kimi 설정 예제는 제거했다. 개발용 JEV computer-use 도구 연결과 제품 서버 설정은 별개다. 실제 `.env`는 자동으로 수정하지 않으며, 남아 있는 옛 항목은 기존 설정 로더의 알 수 없는 항목 무시 규칙을 따른다.
 
 현재 구현이 바뀌면 해당 책임 문서를 갱신하고, 다음 작업과 미완료 사항은 Issue나 PR에 기록한다.

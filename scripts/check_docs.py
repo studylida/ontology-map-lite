@@ -4,7 +4,6 @@ import argparse
 import os
 import re
 import runpy
-from datetime import date
 from pathlib import Path
 from urllib.parse import unquote
 
@@ -14,7 +13,6 @@ from sqlalchemy.dialects import postgresql
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_PATH = Path("server/src/ontology_map/db/schema.py")
 REFERENCE_PATH = Path("docs/data/schema-reference.md")
-DECISIONS_PATH = Path("docs/architecture/decisions")
 SKIPPED_DIRECTORIES = {
     ".git",
     ".mypy_cache",
@@ -26,22 +24,9 @@ SKIPPED_DIRECTORIES = {
     "dist",
     "node_modules",
 }
-REQUIRED_ADR_FIELDS = {
-    "id",
-    "title",
-    "status",
-    "decision_date",
-    "recorded_date",
-    "evidence",
-    "supersedes",
-    "superseded_by",
-    "affected_docs",
-}
 LINK_PATTERN = re.compile(r"!?\[[^\]]*]\(([^)]+)\)")
 REFERENCE_LINK_PATTERN = re.compile(r"^\s*\[[^\]]+]:\s*(\S+)")
 HEADING_PATTERN = re.compile(r"^\s{0,3}#{1,6}\s+(.+?)\s*#*\s*$")
-ADR_ID_PATTERN = re.compile(r"ADR-(\d{4})")
-ADR_FILE_PATTERN = re.compile(r"(\d{4})-[a-z0-9-]+\.md")
 BACKTICK = chr(96)
 FENCE_PREFIXES = (BACKTICK * 3, "~" * 3)
 DIALECT = postgresql.dialect()
@@ -358,183 +343,6 @@ def check_markdown_links(root: Path) -> list[str]:
     return errors
 
 
-def parse_adr(path: Path) -> tuple[dict[str, str], list[str]]:
-    lines = path.read_text(encoding="utf-8").splitlines()
-    errors: list[str] = []
-    if not lines or lines[0] != "---":
-        return {}, [f"{path}: ADR metadata 시작 구분자가 없습니다."]
-    try:
-        end = lines.index("---", 1)
-    except ValueError:
-        return {}, [f"{path}: ADR metadata 종료 구분자가 없습니다."]
-
-    metadata: dict[str, str] = {}
-    for line in lines[1:end]:
-        key, separator, value = line.partition(":")
-        if not separator or not key.strip() or not value.strip():
-            errors.append(f"{path}: 잘못된 ADR metadata 행: {line!r}")
-            continue
-        key = key.strip()
-        if key in metadata:
-            errors.append(f"{path}: ADR metadata {key!r}가 중복됐습니다.")
-        metadata[key] = value.strip()
-    return metadata, errors
-
-
-def adr_references(value: str) -> set[str]:
-    return {match.group(0) for match in ADR_ID_PATTERN.finditer(value)}
-
-
-def validate_adr_file(
-    path: Path,
-    relative: Path,
-    folder: str,
-    expected_status: str,
-) -> tuple[dict[str, str], list[str]]:
-    metadata, errors = parse_adr(path)
-    if not ADR_FILE_PATTERN.fullmatch(path.name):
-        errors.append(f"{relative}: ADR 파일 이름 형식이 잘못됐습니다.")
-    missing = REQUIRED_ADR_FIELDS - metadata.keys()
-    if missing:
-        fields = ", ".join(sorted(missing))
-        errors.append(f"{relative}: ADR metadata가 없습니다: {fields}.")
-        return metadata, errors
-
-    match = ADR_ID_PATTERN.fullmatch(metadata["id"])
-    if not match or not path.name.startswith(f"{match.group(1)}-"):
-        errors.append(f"{relative}: ADR id와 파일 번호가 일치하지 않습니다.")
-    if metadata["status"] != expected_status:
-        errors.append(
-            f"{relative}: {folder} ADR status는 {expected_status}여야 합니다."
-        )
-    if folder == "current" and metadata["superseded_by"] != "none":
-        errors.append(f"{relative}: current ADR은 superseded_by가 none이어야 합니다.")
-    if folder == "superseded" and metadata["superseded_by"] == "none":
-        errors.append(f"{relative}: superseded ADR에는 superseded_by가 필요합니다.")
-    for field in ("decision_date", "recorded_date"):
-        try:
-            date.fromisoformat(metadata[field])
-        except ValueError:
-            errors.append(f"{relative}: {field}는 YYYY-MM-DD여야 합니다.")
-    if metadata["evidence"] == "none" or metadata["affected_docs"] == "none":
-        errors.append(f"{relative}: evidence와 affected_docs는 비어 있을 수 없습니다.")
-    return metadata, errors
-
-
-def check_adr_metadata(
-    root: Path,
-) -> tuple[list[str], dict[str, tuple[Path, dict[str, str]]]]:
-    errors: list[str] = []
-    records: dict[str, tuple[Path, dict[str, str]]] = {}
-    decisions = root / DECISIONS_PATH
-    for folder, expected_status in (
-        ("current", "accepted"),
-        ("superseded", "superseded"),
-    ):
-        for path in sorted((decisions / folder).glob("*.md")):
-            if path.name == "README.md":
-                continue
-            relative = path.relative_to(root)
-            metadata, file_errors = validate_adr_file(
-                path, relative, folder, expected_status
-            )
-            errors.extend(file_errors)
-            if REQUIRED_ADR_FIELDS - metadata.keys():
-                continue
-            adr_id = metadata["id"]
-            if adr_id in records:
-                errors.append(f"{relative}: ADR id {adr_id}가 중복됐습니다.")
-            records[adr_id] = (relative, metadata)
-    return errors, records
-
-
-def check_adr_reference_field(
-    adr_id: str,
-    path: Path,
-    field: str,
-    reverse_field: str,
-    value: str,
-    records: dict[str, tuple[Path, dict[str, str]]],
-) -> list[str]:
-    errors: list[str] = []
-    references = adr_references(value)
-    if value != "none" and not references:
-        errors.append(f"{path}: {field}에 유효한 ADR id가 없습니다.")
-    if adr_id in references:
-        errors.append(f"{path}: ADR은 자신을 {field}로 참조할 수 없습니다.")
-    for target_id in references:
-        target = records.get(target_id)
-        if target is None:
-            errors.append(f"{path}: {field} 대상 {target_id}가 없습니다.")
-            continue
-        if adr_id not in adr_references(target[1][reverse_field]):
-            errors.append(
-                f"{path}: {target_id}의 {reverse_field}가 {adr_id}를 가리키지 않습니다."
-            )
-    return errors
-
-
-def check_adr_relationships(
-    root: Path,
-    records: dict[str, tuple[Path, dict[str, str]]],
-) -> list[str]:
-    errors: list[str] = []
-    # 경량화 이후 ADR이 없는 저장소에는 색인을 요구하지 않는다.
-    if not records and not (root / DECISIONS_PATH).exists():
-        return errors
-    index_path = root / DECISIONS_PATH / "README.md"
-    if not index_path.exists():
-        return [f"{DECISIONS_PATH}/README.md: ADR 색인이 없습니다."]
-    indexed_paths: set[Path] = set()
-    for _, raw_target in markdown_targets(index_path):
-        target, _, error = resolve_repository_link(root, index_path, raw_target)
-        if not error and target is not None:
-            indexed_paths.add(target.relative_to(root))
-    for adr_id, (path, metadata) in records.items():
-        if path not in indexed_paths:
-            errors.append(f"{path}: ADR 색인에 {adr_id} 링크가 없습니다.")
-        errors.extend(
-            check_adr_reference_field(
-                adr_id,
-                path,
-                "supersedes",
-                "superseded_by",
-                metadata["supersedes"],
-                records,
-            )
-        )
-        errors.extend(
-            check_adr_reference_field(
-                adr_id,
-                path,
-                "superseded_by",
-                "supersedes",
-                metadata["superseded_by"],
-                records,
-            )
-        )
-    return errors
-
-
-def check_current_links_to_superseded(root: Path) -> list[str]:
-    errors: list[str] = []
-    decisions = (root / DECISIONS_PATH).resolve()
-    superseded = (decisions / "superseded").resolve()
-    for source in iter_markdown_files(root):
-        if source.resolve().is_relative_to(decisions):
-            continue
-        for line_number, raw_target in markdown_targets(source):
-            target, _, error = resolve_repository_link(root, source, raw_target)
-            if error or target is None:
-                continue
-            if target.resolve().is_relative_to(superseded):
-                errors.append(
-                    f"{source.relative_to(root)}:{line_number}: 현재 문서가 "
-                    "superseded ADR을 현재 결정으로 참조합니다."
-                )
-    return errors
-
-
 def check_schema_reference(root: Path, expected_reference: str) -> list[str]:
     reference = root / REFERENCE_PATH
     if (
@@ -553,10 +361,6 @@ def check_schema_reference(root: Path, expected_reference: str) -> list[str]:
 def run_checks(root: Path, expected_reference: str) -> list[str]:
     errors = check_schema_reference(root, expected_reference)
     errors.extend(check_markdown_links(root))
-    metadata_errors, records = check_adr_metadata(root)
-    errors.extend(metadata_errors)
-    errors.extend(check_adr_relationships(root, records))
-    errors.extend(check_current_links_to_superseded(root))
     return errors
 
 
@@ -589,13 +393,10 @@ def main() -> int:
     if errors:
         print("\n".join(f"ERROR: {error}" for error in errors))
         return 1
-    adr_count = sum(
-        1 for path in (ROOT / DECISIONS_PATH).glob("*/*.md") if path.name != "README.md"
-    )
     print(
         "문서 검사 통과: "
         f"table {len(metadata.tables)}개, "
-        f"Markdown {len(iter_markdown_files(ROOT))}개, ADR {adr_count}개"
+        f"Markdown {len(iter_markdown_files(ROOT))}개"
     )
     return 0
 

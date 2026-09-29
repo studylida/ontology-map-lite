@@ -77,7 +77,7 @@ Pull Request를 열면 Issue에 링크를 남기고 리뷰 중에도 `status: in
 uv run --project server --frozen python scripts/check_docs.py --write
 ```
 
-다음 중 하나에 해당하는 승인된 결정은 구현 PR에서 ADR로 함께 기록한다.
+다음 중 하나에 해당하는 승인된 결정은 구현 PR과 해당 책임 문서에 이유를 함께 기록한다.
 
 - service나 container 경계와 의존 방향을 바꾼다.
 - 영속 데이터의 의미, 소유권이나 수명주기를 바꾼다.
@@ -85,9 +85,9 @@ uv run --project server --frozen python scripts/check_docs.py --write
 - 보안, 배포, 가용성이나 운영 원칙을 바꾼다.
 - 되돌리는 비용이 크거나 대안을 선택한 이유를 장기간 보존해야 한다.
 
-작은 UI 문구, 국소적인 bug 수정, 내부 refactor와 단순 필드 추가에는 ADR을 요구하지 않는다. Issue는 대안을 논의하는 곳이고 ADR은 구현 PR에서 받아들인 결정의 기록이다. `proposed` ADR은 만들지 않으며 PR 병합을 수용으로 본다. 기존 결정을 대체할 때는 새 ADR을 만들고 기존 ADR을 `superseded`로 바꾸어 `current/`에서 `superseded/`로 옮긴 뒤 두 문서의 `supersedes`와 `superseded_by`를 서로 연결한다. 이전 경로에 안내 파일을 남기지 않고 모든 현재 문서 링크를 새 결정으로 갱신한다.
+작은 UI 문구, 국소적인 bug 수정, 내부 refactor와 단순 필드 추가에는 별도 결정 문서를 요구하지 않는다. 중요한 결정은 대안·선택 이유·영향을 기존 책임 문서에 남긴다. 특정 ADR 디렉터리나 메타데이터 형식은 강제하지 않는다.
 
-Pull Request를 열기 전에 다음 검사로 생성 문서, 저장소 내부 Markdown 링크와 ADR 메타데이터·색인·대체 관계를 확인한다. 현재 경량화 저장소에는 ADR 디렉터리가 없다. ADR을 작성하면 기존 `docs/architecture/decisions/` 구조와 색인 규칙을 따르며, 디렉터리나 ADR이 존재하는데 색인이 빠진 경우에는 검사가 실패한다.
+Pull Request를 열기 전에 다음 검사로 생성 스키마 문서와 저장소 내부 Markdown 링크를 확인한다.
 
 ```bash
 uv run --project server --frozen python scripts/check_docs.py --check
