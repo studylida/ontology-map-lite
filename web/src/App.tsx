@@ -1,6 +1,6 @@
 // web/src/App.tsx
 import { useCallback, useEffect, useRef, useState } from "react";
-import { dismissAgentTask, fetchAgentTasks, fetchSubgraph } from "./api";
+import { dismissAgentTask, fetchAgentTasks, fetchSubgraph, searchNodes } from "./api";
 import { GraphCanvas, type GraphCanvasHandle } from "./GraphCanvas";
 import { SidePanel } from "./SidePanel";
 import { NodeSearch } from "./NodeSearch";
@@ -18,8 +18,8 @@ import styles from "./App.module.css";
 export function App() {
   const canvasRef = useRef<GraphCanvasHandle | null>(null);
 
-  // 1. 기본 3D 그래프 상태
-  const [centerNodeId, setCenterNodeId] = useState<number>(5);
+  // 1. 기본 3D 그래프 상태 (SK하이닉스 487 기본값)
+  const [centerNodeId, setCenterNodeId] = useState<number>(487);
   const [nodes, setNodes] = useState<GraphNode[]>([]);
   const [edges, setEdges] = useState<GraphEdge[]>([]);
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
@@ -80,6 +80,29 @@ export function App() {
           res.nodes.find((n) => n.id === nodeId) ?? res.nodes[0] ?? null;
         setSelectedNode(center);
       } catch (err: any) {
+        // 지정된 노드가 없을 경우(404 등), DB에 존재하는 유효 노드로 자동 폴백 복구
+        try {
+          const fallbackList = await searchNodes("");
+          const altNode = fallbackList.find((item) => item.id !== nodeId) || fallbackList[0];
+          if (altNode) {
+            const fallbackRes = await fetchSubgraph(altNode.id, unbounded);
+            setCenterNodeId(altNode.id);
+            setNodes(fallbackRes.nodes);
+            setEdges(fallbackRes.edges);
+            setHasOmitted(Boolean(fallbackRes.has_omitted));
+            setOmittedCount(fallbackRes.omitted_count ?? 0);
+            const center =
+              fallbackRes.nodes.find((n) => n.id === altNode.id) ??
+              fallbackRes.nodes[0] ??
+              null;
+            setSelectedNode(center);
+            setError(null);
+            return;
+          }
+        } catch {
+          // 폴백도 실패한 경우 아래 setError로 처리
+        }
+
         setError(
           err.message ?? "그래프 데이터를 불러오는 중 오류가 발생했습니다.",
         );
