@@ -20,6 +20,8 @@ interface CandidateRow {
   cls: string;
   sub: string;
   blocked?: boolean;
+  dependsOn?: string[];
+  targetType?: "edge" | "property" | "report" | "blocked";
 }
 
 interface EvidenceLocationProps {
@@ -136,14 +138,50 @@ export function HitlReviewModal({
 
   if (!isOpen) return null;
 
-  // 체크박스 토글 핸들러
+  // 선행 필수 조건(dependsOn) 충족 여부 확인 (범용 DAG)
+  const isPrerequisiteMet = (
+    row: CandidateRow,
+    enabled: Set<string>,
+  ): boolean => {
+    if (!row.dependsOn || row.dependsOn.length === 0) return true;
+    return row.dependsOn.every((depId) => enabled.has(depId));
+  };
+
+  // 체크박스 토글 핸들러 (의존 관계 자동 연쇄 해제 & 선행조건 연동)
   const handleToggleItem = (id: string, blocked?: boolean) => {
     if (blocked) return;
+
     setEnabledItemIds((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) {
+      const isCurrentlyChecked = next.has(id);
+      const rows: CandidateRow[] = bundleData?.rows || [];
+
+      if (isCurrentlyChecked) {
+        // 1. 체크 해제 시: 해당 항목 제거 및 이 항목에 의존하는 모든 자식 항목들을 재귀적 연쇄 해제 (Cascade Uncheck)
         next.delete(id);
+
+        const toUncheck = [id];
+        while (toUncheck.length > 0) {
+          const parentId = toUncheck.pop()!;
+          for (const r of rows) {
+            if (
+              r.dependsOn &&
+              r.dependsOn.includes(parentId) &&
+              next.has(r.id)
+            ) {
+              next.delete(r.id);
+              toUncheck.push(r.id);
+            }
+          }
+        }
       } else {
+        // 2. 체크 시: 선행 조건 항목들이 꺼져 있으면 선행 부모들도 함께 켜줌 (Auto-enable prerequisites)
+        const targetRow = rows.find((r) => r.id === id);
+        if (targetRow && targetRow.dependsOn) {
+          for (const depId of targetRow.dependsOn) {
+            next.add(depId);
+          }
+        }
         next.add(id);
       }
       return next;
@@ -761,6 +799,7 @@ export function HitlReviewModal({
   const renderComparisonTable = (side: "before" | "after") => {
     if (producer === "news") {
       const isMainChecked = enabledItemIds.has("main");
+      const isSecondChecked = enabledItemIds.has("second");
       return (
         <table className={styles.compareTable}>
           <tbody>
@@ -770,16 +809,24 @@ export function HitlReviewModal({
             </tr>
             <tr
               className={
-                side === "after" && isMainChecked ? styles.compareRowChanged : ""
+                side === "after"
+                  ? isMainChecked
+                    ? styles.compareRowChanged
+                    : styles.compareRowExcluded
+                  : ""
               }
             >
               <th>공급 파트너</th>
               <td>
-                {side === "before" || !isMainChecked ? (
+                {side === "before" ? (
                   <span style={{ color: "#7b93ae" }}>정보 없음 (미등록)</span>
-                ) : (
+                ) : isMainChecked ? (
                   <span>
                     <strong>누리소재</strong> (2026.09.25 공급계약 신규 연결)
+                  </span>
+                ) : (
+                  <span>
+                    — <span className={styles.excludedBadge}>반영 제외됨</span>
                   </span>
                 )}
               </td>
@@ -790,19 +837,56 @@ export function HitlReviewModal({
             </tr>
             <tr
               className={
-                side === "after" && isMainChecked ? styles.compareRowPending : ""
+                side === "after"
+                  ? isSecondChecked
+                    ? styles.compareRowChanged
+                    : styles.compareRowExcluded
+                  : ""
               }
             >
-              <th>AI 분석 리포트</th>
+              <th>리포트 카드</th>
               <td>
                 {side === "before" ? (
-                  <span style={{ color: "#7b93ae" }}>
-                    2024년도 기준 종합 리포트
+                  <span style={{ color: "#7b93ae" }}>등록된 계획 없음</span>
+                ) : isSecondChecked ? (
+                  <span>
+                    <span className={styles.reportBadge}>리포트 보관</span>{" "}
+                    2027년 증산 검토 계획 카드 보관
                   </span>
                 ) : (
                   <span>
+                    —{" "}
+                    <span className={styles.excludedBadge}>
+                      리포트 반영 제외
+                    </span>
+                  </span>
+                )}
+              </td>
+            </tr>
+            <tr
+              className={
+                side === "after"
+                  ? isMainChecked
+                    ? styles.compareRowPending
+                    : styles.compareRowExcluded
+                  : ""
+              }
+            >
+              <th>AI 분석 갱신</th>
+              <td>
+                {side === "before" ? (
+                  <span style={{ color: "#7b93ae" }}>기존 2024 분석 유지</span>
+                ) : isMainChecked ? (
+                  <span>
                     <strong>종합 리포트 갱신 예정</strong> (누리소재 공급계약
                     반영)
+                  </span>
+                ) : (
+                  <span>
+                    —{" "}
+                    <span className={styles.excludedBadge}>
+                      계약 미반영 시 미갱신
+                    </span>
                   </span>
                 )}
               </td>
@@ -813,65 +897,110 @@ export function HitlReviewModal({
     } else if (producer === "gov") {
       const isMainChecked = enabledItemIds.has("main");
       const isSecondChecked = enabledItemIds.has("second");
+      const isNoteChecked = enabledItemIds.has("note");
       return (
         <table className={styles.compareTable}>
           <tbody>
-            <tr>
-              <th>기준 기업</th>
-              <td>
-                {side === "before" ? (
-                  "한결정밀"
-                ) : (
-                  <span>
-                    한결정밀{" "}
-                    <span className={styles.tagNote}>신청 검토 추천 대상</span>
-                  </span>
-                )}
-              </td>
-            </tr>
             <tr
               className={
-                side === "after" && isMainChecked ? styles.compareRowChanged : ""
+                side === "after"
+                  ? isMainChecked
+                    ? styles.compareRowChanged
+                    : styles.compareRowExcluded
+                  : ""
               }
             >
               <th>주관 기관</th>
               <td>
-                {side === "before" || !isMainChecked ? (
+                {side === "before" ? (
                   <span style={{ color: "#7b93ae" }}>정보 없음 (미등록)</span>
-                ) : (
+                ) : isMainChecked ? (
                   <span>
                     <strong>새봄산업지원원</strong> (신규 주관기관 노드)
+                  </span>
+                ) : (
+                  <span>
+                    — <span className={styles.excludedBadge}>반영 제외됨</span>
                   </span>
                 )}
               </td>
             </tr>
             <tr
               className={
-                side === "after" && isSecondChecked
-                  ? styles.compareRowChanged
+                side === "after"
+                  ? isMainChecked
+                    ? styles.compareRowChanged
+                    : styles.compareRowExcluded
                   : ""
               }
             >
               <th>지원 사업</th>
               <td>
-                {side === "before" || !isSecondChecked ? (
-                  <span style={{ color: "#7b93ae" }}>정보 없음</span>
+                {side === "before" ? (
+                  <span style={{ color: "#7b93ae" }}>공고 미등록</span>
+                ) : isMainChecked ? (
+                  <span>
+                    <strong>2026 제조데이터 실증지원 사업</strong> (신규 사업
+                    노드)
+                  </span>
                 ) : (
                   <span>
-                    <strong>2026 제조데이터 실증지원 사업</strong> (총 20억 /
-                    기업당 1억)
+                    — <span className={styles.excludedBadge}>반영 제외됨</span>
                   </span>
                 )}
               </td>
             </tr>
-            <tr className={side === "after" ? styles.compareRowProtected : ""}>
-              <th>기업 연계 관계</th>
+            <tr
+              className={
+                side === "after"
+                  ? isSecondChecked
+                    ? styles.compareRowChanged
+                    : styles.compareRowExcluded
+                  : ""
+              }
+            >
+              <th>사업 세부 속성</th>
               <td>
                 {side === "before" ? (
-                  <span style={{ color: "#7b93ae" }}>해당 없음</span>
+                  <span style={{ color: "#7b93ae" }}>속성 없음</span>
+                ) : isSecondChecked ? (
+                  <span>
+                    <strong>총 20억원 · 기업당 최대 1억원 · 마감 10.30</strong>
+                  </span>
                 ) : (
                   <span>
-                    <strong>선정·수령 간선 없음</strong> (지침 준수 · 독립 묶음)
+                    —{" "}
+                    <span className={styles.excludedBadge}>
+                      속성 반영 제외 (기본명칭만 등록)
+                    </span>
+                  </span>
+                )}
+              </td>
+            </tr>
+            <tr
+              className={
+                side === "after"
+                  ? isNoteChecked
+                    ? styles.compareRowChanged
+                    : styles.compareRowExcluded
+                  : ""
+              }
+            >
+              <th>추천의견 리포트</th>
+              <td>
+                {side === "before" ? (
+                  <span style={{ color: "#7b93ae" }}>추천의견 없음</span>
+                ) : isNoteChecked ? (
+                  <span>
+                    <span className={styles.reportBadge}>리포트 보관</span>{" "}
+                    GovInsight 신청 요건 검토 권고의견
+                  </span>
+                ) : (
+                  <span>
+                    —{" "}
+                    <span className={styles.excludedBadge}>
+                      리포트 반영 제외
+                    </span>
                   </span>
                 )}
               </td>
@@ -883,6 +1012,7 @@ export function HitlReviewModal({
       // excel
       const isMainChecked = enabledItemIds.has("main");
       const isSecondChecked = enabledItemIds.has("second");
+      const isNoteChecked = enabledItemIds.has("note");
       return (
         <table className={styles.compareTable}>
           <tbody>
@@ -893,7 +1023,10 @@ export function HitlReviewModal({
                   "한결정밀"
                 ) : (
                   <span>
-                    한결정밀 <span className={styles.tagWarn}>속성 보강</span>
+                    한결정밀{" "}
+                    {isMainChecked && (
+                      <span className={styles.tagWarn}>속성 보강</span>
+                    )}
                   </span>
                 )}
               </td>
@@ -904,34 +1037,76 @@ export function HitlReviewModal({
             </tr>
             <tr
               className={
-                side === "after" && isMainChecked ? styles.compareRowChanged : ""
+                side === "after"
+                  ? isMainChecked
+                    ? styles.compareRowChanged
+                    : styles.compareRowExcluded
+                  : ""
               }
             >
               <th>2025년 별도 매출</th>
               <td>
-                {side === "before" || !isMainChecked ? (
+                {side === "before" ? (
                   <span style={{ color: "#7b93ae" }}>미등록 (공백)</span>
-                ) : (
+                ) : isMainChecked ? (
                   <span>
                     <strong>120억원</strong> (실적!C3 발췌 · 신규 적재)
+                  </span>
+                ) : (
+                  <span>
+                    — <span className={styles.excludedBadge}>매출 반영 제외</span>
                   </span>
                 )}
               </td>
             </tr>
             <tr
               className={
-                side === "after" && isSecondChecked
-                  ? styles.compareRowChanged
+                side === "after"
+                  ? isSecondChecked
+                    ? styles.compareRowChanged
+                    : styles.compareRowExcluded
                   : ""
               }
             >
               <th>전년 대비 증감률</th>
               <td>
-                {side === "before" || !isSecondChecked ? (
+                {side === "before" ? (
                   <span style={{ color: "#7b93ae" }}>산식 없음</span>
-                ) : (
+                ) : isSecondChecked ? (
                   <span>
                     <strong>+20% 증가</strong> ((120 - 100) / 100 × 100)
+                  </span>
+                ) : (
+                  <span>
+                    — <span className={styles.excludedBadge}>증감률 제외</span>
+                  </span>
+                )}
+              </td>
+            </tr>
+            <tr
+              className={
+                side === "after"
+                  ? isNoteChecked
+                    ? styles.compareRowChanged
+                    : styles.compareRowExcluded
+                  : ""
+              }
+            >
+              <th>수요추정 리포트</th>
+              <td>
+                {side === "before" ? (
+                  <span style={{ color: "#7b93ae" }}>추정 없음</span>
+                ) : isNoteChecked ? (
+                  <span>
+                    <span className={styles.reportBadge}>리포트 보관</span>{" "}
+                    수요 증가 영향 가능성 메모 보관
+                  </span>
+                ) : (
+                  <span>
+                    —{" "}
+                    <span className={styles.excludedBadge}>
+                      리포트 반영 제외
+                    </span>
                   </span>
                 )}
               </td>
@@ -1247,10 +1422,9 @@ export function HitlReviewModal({
         >
           {defs}
 
-          {/* 1. 정부지원 독립 묶음 영역 (새봄산업지원원 -> 실증지원) */}
           {showGovNodes ? (
             <g>
-              {/* 새봄산업지원원 노드 (x: 40, y: 45, w: 135, h: 42) */}
+              {/* 1. 새봄산업지원원 노드 (x: 40, y: 72, w: 160, h: 52) */}
               <g
                 className={`${styles.svgNode} ${
                   isMainSelected ? styles.svgNodeSelected : ""
@@ -1259,82 +1433,82 @@ export function HitlReviewModal({
               >
                 <rect
                   x="40"
-                  y="45"
-                  width="135"
-                  height="42"
-                  rx="6"
+                  y="72"
+                  width="160"
+                  height="52"
+                  rx="7"
                   fill="#172b3c"
                   stroke={isMainSelected ? "#64d1ef" : "#3b7296"}
                   strokeWidth={isMainSelected ? 2 : 1.5}
                 />
                 <rect
                   x="44"
-                  y="49"
-                  width="34"
-                  height="14"
+                  y="76"
+                  width="36"
+                  height="16"
                   rx="3"
                   fill="#1b455f"
                 />
                 <text
-                  x="47"
-                  y="59"
+                  x="48"
+                  y="88"
                   fill="#64d1ef"
-                  fontSize="9"
+                  fontSize="9.5"
                   fontWeight="700"
                 >
                   + 신규
                 </text>
                 <text
-                  x="84"
-                  y="63"
+                  x="88"
+                  y="91"
                   fill="#ffffff"
-                  fontSize="12"
+                  fontSize="13"
                   fontWeight="700"
                 >
                   새봄산업지원원
                 </text>
-                <text x="84" y="78" fill="#94a7c0" fontSize="9.5">
-                  공고 주관기관
+                <text x="88" y="111" fill="#94a7c0" fontSize="10">
+                  공고 주관기관 (ORGANIZATION)
                 </text>
               </g>
 
-              {/* 주관 화살표 간선 */}
+              {/* 2. 주관 간선 (새봄산업지원원 -> 실증지원) */}
               <g
                 className={styles.svgEdge}
                 onClick={() => setSelectedItemId("main")}
               >
                 <line
-                  x1="107"
-                  y1="87"
-                  x2="107"
-                  y2="120"
+                  x1="200"
+                  y1="98"
+                  x2="280"
+                  y2="98"
                   stroke="#38bdf8"
-                  strokeWidth="2"
+                  strokeWidth="2.2"
                   markerEnd={`url(#arrow-sky-${side})`}
                 />
                 <rect
-                  x="113"
-                  y="96"
-                  width="30"
-                  height="14"
-                  rx="3"
+                  x="215"
+                  y="83"
+                  width="50"
+                  height="18"
+                  rx="4"
                   fill="#0c1d2e"
                   stroke="#244b68"
-                  strokeWidth="0.8"
+                  strokeWidth="1"
                 />
                 <text
-                  x="128"
-                  y="107"
+                  x="240"
+                  y="96"
                   textAnchor="middle"
                   fill="#38bdf8"
-                  fontSize="9.5"
+                  fontSize="10"
                   fontWeight="700"
                 >
                   주관
                 </text>
               </g>
 
-              {/* 2026 제조데이터 실증지원 사업 노드 (x: 25, y: 120, w: 185, h: 44) */}
+              {/* 3. 2026 제조데이터 실증지원 사업 노드 (x: 280, y: 72, w: 220, h: 52) */}
               <g
                 className={`${styles.svgNode} ${
                   isSecondSelected ? styles.svgNodeSelected : ""
@@ -1342,59 +1516,85 @@ export function HitlReviewModal({
                 onClick={() => setSelectedItemId("second")}
               >
                 <rect
-                  x="25"
-                  y="120"
-                  width="185"
-                  height="44"
+                  x="280"
+                  y="72"
+                  width="220"
+                  height="52"
                   rx="7"
                   fill="#241e38"
                   stroke={isSecondSelected ? "#a855f7" : "#5d4681"}
                   strokeWidth={isSecondSelected ? 2 : 1.5}
                 />
                 <rect
-                  x="29"
-                  y="124"
-                  width="34"
-                  height="14"
+                  x="284"
+                  y="76"
+                  width="36"
+                  height="16"
                   rx="3"
                   fill="#3a2a56"
                 />
                 <text
-                  x="32"
-                  y="134"
+                  x="288"
+                  y="88"
                   fill="#c084fc"
-                  fontSize="9"
+                  fontSize="9.5"
                   fontWeight="700"
                 >
                   + 신규
                 </text>
                 <text
-                  x="69"
-                  y="138"
+                  x="328"
+                  y="91"
                   fill="#ffffff"
-                  fontSize="12"
+                  fontSize="13"
                   fontWeight="700"
                 >
                   제조데이터 실증지원
                 </text>
                 <text
-                  x="117"
-                  y="154"
+                  x="390"
+                  y="111"
                   textAnchor="middle"
-                  fill="#c4b5fd"
-                  fontSize="9.5"
+                  fill={isSecondChecked ? "#c4b5fd" : "#718096"}
+                  fontSize={isSecondChecked ? "10" : "9"}
                 >
-                  총예산 20억 · 기업당 1억
+                  {isSecondChecked
+                    ? "총 20억원 · 기업당 최대 1억원"
+                    : "(세부 속성 반영 제외됨)"}
+                </text>
+              </g>
+
+              {/* 하단 요약 안내 */}
+              <g>
+                <rect
+                  x="60"
+                  y="170"
+                  width="420"
+                  height="26"
+                  rx="5"
+                  fill="rgba(14, 116, 144, 0.18)"
+                  stroke="#0891b2"
+                  strokeWidth="1"
+                />
+                <text
+                  x="270"
+                  y="187"
+                  textAnchor="middle"
+                  fill="#38bdf8"
+                  fontSize="11"
+                  fontWeight="600"
+                >
+                  ✨ 정부지원 공고 독립 지식 묶음 등록 (신규 노드 2개 · 주관 간선 1개)
                 </text>
               </g>
             </g>
           ) : (
-            <g opacity="0.6">
+            <g opacity="0.75">
               <rect
-                x="25"
-                y="45"
-                width="185"
-                height="115"
+                x="70"
+                y="55"
+                width="400"
+                height="100"
                 rx="8"
                 fill="#0d1726"
                 stroke="#25354e"
@@ -1402,148 +1602,29 @@ export function HitlReviewModal({
                 strokeDasharray="4 3"
               />
               <text
-                x="117"
-                y="98"
+                x="270"
+                y="100"
                 textAnchor="middle"
                 fill="#64748b"
-                fontSize="12"
+                fontSize="12.5"
                 fontWeight="600"
               >
-                정부지원사업 없음
+                {isBefore
+                  ? "정부지원사업 공고 미등록"
+                  : "— 주관 간선 및 공고 노드 반영 제외됨 —"}
               </text>
-              <text
-                x="117"
-                y="116"
-                textAnchor="middle"
-                fill="#475569"
-                fontSize="10"
-              >
-                (주관기관 및 공고 미연계)
-              </text>
-            </g>
-          )}
-
-          {/* 2. 한결정밀 노드 (x: 320, y: 55, w: 135, h: 46) - 좌우 위치 동일 */}
-          <g className={styles.svgNode}>
-            <rect
-              x="320"
-              y="55"
-              width="135"
-              height="46"
-              rx="7"
-              fill="#122438"
-              stroke="#345474"
-              strokeWidth="1.5"
-            />
-            <text
-              x="387"
-              y="74"
-              textAnchor="middle"
-              fill="#ffffff"
-              fontSize="13"
-              fontWeight="700"
-            >
-              한결정밀
-            </text>
-            <text
-              x="387"
-              y="90"
-              textAnchor="middle"
-              fill="#94a7c0"
-              fontSize="10"
-            >
-              기존 기업 (신청 검토 권고)
-            </text>
-          </g>
-
-          {/* 3. 운영 간선 (한결정밀 -> 부산공장) */}
-          <line
-            x1="387"
-            y1="101"
-            x2="430"
-            y2="145"
-            stroke="#405973"
-            strokeWidth="1.5"
-            markerEnd={`url(#arrow-default-${side})`}
-          />
-          <rect x="390" y="115" width="34" height="15" rx="3" fill="#0b1728" />
-          <text
-            x="407"
-            y="126"
-            textAnchor="middle"
-            fill="#7d96b2"
-            fontSize="9.5"
-          >
-            운영
-          </text>
-
-          {/* 4. 부산공장 노드 (x: 385, y: 145, w: 105, h: 36) - 좌우 위치 동일 */}
-          <g className={styles.svgNode}>
-            <rect
-              x="385"
-              y="145"
-              width="105"
-              height="36"
-              rx="6"
-              fill="#101c2d"
-              stroke="#273d56"
-              strokeWidth="1.2"
-            />
-            <text
-              x="437"
-              y="163"
-              textAnchor="middle"
-              fill="#e2e8f0"
-              fontSize="11.5"
-              fontWeight="600"
-            >
-              부산공장
-            </text>
-            <text
-              x="437"
-              y="174"
-              textAnchor="middle"
-              fill="#71869e"
-              fontSize="9"
-            >
-              제조 시설
-            </text>
-          </g>
-
-          {/* 5. 보호 뱃지 (한결정밀-사업 간 선정 간선 절대 생성 금지 원칙) */}
-          {showGovNodes ? (
-            <g>
-              <rect
-                x="50"
-                y="185"
-                width="440"
-                height="24"
-                rx="5"
-                fill="rgba(22, 101, 52, 0.2)"
-                stroke="#16a34a"
-                strokeWidth="1"
-              />
               <text
                 x="270"
-                y="201"
+                y="120"
                 textAnchor="middle"
-                fill="#4ade80"
-                fontSize="10.5"
-                fontWeight="700"
+                fill="#475569"
+                fontSize="11"
               >
-                🛡️ 무근거 선정·수령 간선 생성 차단 · 독립 주관 프로그램으로 적재
+                {isBefore
+                  ? "(새봄산업지원원 및 실증지원 사업 정보 없음)"
+                  : "(상단 '새봄산업지원원 → 실증지원' 체크 시 생성)"}
               </text>
             </g>
-          ) : (
-            <text
-              x="270"
-              y="202"
-              textAnchor="middle"
-              fill="#64748b"
-              fontSize="11"
-            >
-              기준 상태: 공고 및 기관 데이터 없음
-            </text>
           )}
         </svg>
       );
@@ -1819,21 +1900,7 @@ export function HitlReviewModal({
           </button>
         </header>
 
-        {/* 2. 히어로 영역 */}
-        <div className={styles.hero}>
-          <div className={styles.heroTitleGroup}>
-            <h1>무엇을 반영할지, 근거와 함께 확인하세요</h1>
-            <p>
-              후보 항목을 체크하여 승인하고, 오른쪽에서 실제 원천 근거와 문맥을
-              대조 검토합니다.
-            </p>
-          </div>
-          <span className={styles.stepCue}>
-            자료 선택 → 근거 검토 → 반영
-          </span>
-        </div>
-
-        {/* 3. 프로듀서 선택 바 */}
+        {/* 2. 프로듀서 선택 바 */}
         <div className={styles.producerBar}>
           <div className={styles.producerTabs}>
             <button
@@ -1996,32 +2063,38 @@ export function HitlReviewModal({
                 <div className={styles.compactBarLabel}>
                   <span className={styles.simulationIcon}>⚡</span>
                   <strong>반영 항목 토글:</strong>
-                  <span className={styles.compactBarHint}>
-                    (체크 시 아래 AFTER 다이어그램 및 속성표 즉시 반영)
-                  </span>
                 </div>
 
                 <div className={styles.compactCandidatePills}>
                   {bundleData?.rows?.map((row: CandidateRow) => {
                     const isChecked = enabledItemIds.has(row.id);
                     const isBlocked = Boolean(row.blocked);
+                    const isPrereqMet = isPrerequisiteMet(row, enabledItemIds);
+                    const isDisabled = isBlocked || (!isChecked && !isPrereqMet);
+
+                    let tooltip = row.sub;
+                    if (isBlocked) {
+                      tooltip = "무근거 후보는 반영이 차단되었습니다";
+                    } else if (!isPrereqMet && !isChecked) {
+                      tooltip = "선행 필수 항목이 먼저 선택되어야 활성화됩니다";
+                    }
 
                     return (
                       <label
                         key={row.id}
                         className={`${styles.candidatePill} ${
                           isChecked ? styles.candidatePillChecked : ""
-                        } ${isBlocked ? styles.candidatePillBlocked : ""}`}
-                        title={
-                          isBlocked
-                            ? "무근거 후보는 반영이 차단되었습니다"
-                            : row.sub
-                        }
+                        } ${isBlocked ? styles.candidatePillBlocked : ""} ${
+                          isDisabled && !isBlocked
+                            ? styles.candidatePillDisabled
+                            : ""
+                        }`}
+                        title={tooltip}
                       >
                         <input
                           type="checkbox"
                           checked={isChecked}
-                          disabled={isBlocked}
+                          disabled={isDisabled}
                           onChange={() => handleToggleItem(row.id, isBlocked)}
                         />
                         <span className={styles.pillTitle}>{row.title}</span>

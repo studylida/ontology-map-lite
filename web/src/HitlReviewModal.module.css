@@ -1061,7 +1061,7 @@
   font-size: 11px;
 }
 
-/* 상단 1줄 컴팩트 시뮬레이션 항목 토글 바 */
+/* 상단 1줄 컴팩트 시뮬레이션 항목 토글 바 (1줄 고정 & 가로 스크롤 지원) */
 .compactCandidateBar {
   flex-shrink: 0;
   display: flex;
@@ -1070,36 +1070,47 @@
   background: #0d1a2d;
   border: 1px solid #1f3757;
   border-radius: 8px;
-  padding: 8px 14px;
-  flex-wrap: wrap;
+  padding: 4px 12px;
+  height: 42px;
+  min-height: 42px;
+  max-height: 42px;
+  flex-wrap: nowrap;
+  overflow: hidden;
 }
 
 .compactBarLabel {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: 11.5px;
   color: #ecf1fa;
   flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .simulationIcon {
   color: #64d1ef;
-  font-size: 14px;
-}
-
-.compactBarHint {
-  font-size: 11px;
-  color: #8da4be;
-  font-weight: normal;
+  font-size: 13px;
 }
 
 .compactCandidatePills {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
   flex: 1;
+  padding: 2px 0;
+}
+
+.compactCandidatePills::-webkit-scrollbar {
+  height: 3px;
+}
+
+.compactCandidatePills::-webkit-scrollbar-thumb {
+  background: #253852;
+  border-radius: 3px;
 }
 
 .candidatePill {
@@ -1109,12 +1120,14 @@
   background: #14243b;
   border: 1px solid #273e5e;
   border-radius: 6px;
-  padding: 5px 11px;
-  font-size: 11.5px;
+  padding: 4px 10px;
+  font-size: 11px;
   color: #a8bcd4;
   cursor: pointer;
   transition: all 0.15s ease;
   user-select: none;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .candidatePill:hover {
@@ -1135,6 +1148,17 @@
   color: #ffffff;
 }
 
+.candidatePillDisabled {
+  opacity: 0.42;
+  background: #101926;
+  border-color: #1c2b3e;
+  cursor: not-allowed;
+}
+
+.candidatePillDisabled input[type="checkbox"] {
+  cursor: not-allowed;
+}
+
 .candidatePillBlocked {
   opacity: 0.55;
   background: #201a18;
@@ -1143,8 +1167,8 @@
 }
 
 .candidatePill input[type="checkbox"] {
-  width: 14px;
-  height: 14px;
+  width: 13px;
+  height: 13px;
   accent-color: #59c9ee;
   cursor: pointer;
 }
@@ -1158,8 +1182,8 @@
 }
 
 .pillBadge {
-  font-size: 10px;
-  padding: 1.5px 6px;
+  font-size: 9.5px;
+  padding: 1px 5px;
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.08);
   color: #94a7c0;
@@ -1174,11 +1198,12 @@
   background: transparent;
   border: 1px solid #253852;
   border-radius: 5px;
-  padding: 4px 10px;
+  padding: 4px 9px;
   font-size: 11px;
   color: #94a7c0;
   cursor: pointer;
   flex-shrink: 0;
+  white-space: nowrap;
   transition: all 0.15s ease;
 }
 
@@ -1187,5 +1212,40 @@
   color: #ecf1fa;
   border-color: #3a567a;
 }
+
+/* 속성표 취소선 및 반영 제외 피드백 */
+.compareRowExcluded td {
+  color: #64748b !important;
+  text-decoration: line-through;
+  background: rgba(15, 23, 42, 0.35);
+}
+
+.excludedBadge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 9.5px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  color: #f87171;
+  margin-left: 6px;
+  text-decoration: none !important;
+  font-weight: 500;
+}
+
+.reportBadge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 9.5px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(168, 85, 247, 0.15);
+  border: 1px solid rgba(168, 85, 247, 0.35);
+  color: #c084fc;
+  margin-left: 6px;
+  font-weight: 600;
+}
+
 
 

@@ -113,13 +113,17 @@ def convert_news_native(raw: dict[str, Any]) -> dict[str, Any]:
             "kind": "지도 연결",
             "cls": "new",
             "sub": "계약 체결 · 원문 10번",
+            "targetType": "edge",
+            "dependsOn": [],
         },
         {
             "id": "second",
             "title": "한결정밀 · 2027년 증산 검토",
-            "kind": "노드 정보",
+            "kind": "리포트 카드",
             "cls": "panel",
             "sub": "회사 발표 · 계획 카드",
+            "targetType": "report",
+            "dependsOn": [],
         },
         {
             "id": "blocked",
@@ -128,6 +132,8 @@ def convert_news_native(raw: dict[str, Any]) -> dict[str, Any]:
             "cls": "warn",
             "sub": "계약만으로 납품을 입증할 수 없음",
             "blocked": True,
+            "targetType": "blocked",
+            "dependsOn": [],
         },
     ]
 
@@ -339,20 +345,26 @@ def convert_gov_native(
             "kind": "지도 연결",
             "cls": "new",
             "sub": "공고 본문의 직접 근거",
+            "targetType": "edge",
+            "dependsOn": [],
         },
         {
             "id": "second",
             "title": "사업 예산·지원 상한·마감·신청 조건",
-            "kind": "노드 정보",
+            "kind": "노드 속성",
             "cls": "panel",
             "sub": "총예산과 기업별 상한을 구분",
+            "targetType": "property",
+            "dependsOn": ["main"],
         },
         {
             "id": "note",
             "title": "한결정밀 · 신청 검토 의견",
-            "kind": "외부 분석",
+            "kind": "리포트 카드",
             "cls": "note",
             "sub": "GovInsight 추천 · 사실과 분리",
+            "targetType": "report",
+            "dependsOn": [],
         },
         {
             "id": "blocked",
@@ -361,6 +373,8 @@ def convert_gov_native(
             "cls": "warn",
             "sub": "선정·지급 결과가 없음",
             "blocked": True,
+            "targetType": "blocked",
+            "dependsOn": [],
         },
     ]
 
@@ -574,23 +588,29 @@ def convert_excel_native(raw: dict[str, Any]) -> dict[str, Any]:
         {
             "id": "main",
             "title": f"한결정밀 · 2025년 매출 {val_2025}억원",
-            "kind": "노드 정보",
+            "kind": "노드 속성",
             "cls": "panel",
             "sub": "별도 · 실적 · 실적!C3",
+            "targetType": "property",
+            "dependsOn": [],
         },
         {
             "id": "second",
             "title": f"2024년 대비 매출 {int(growth_rate) if growth_rate is not None else 20}% 증가",
-            "kind": "계산 정보",
+            "kind": "파생 속성",
             "cls": "panel",
             "sub": f"({val_2025} − {val_2024}) ÷ {val_2024} × 100",
+            "targetType": "property",
+            "dependsOn": ["main"],
         },
         {
             "id": "note",
             "title": "수요 증가가 영향을 주었을 가능성",
-            "kind": "외부 분석",
+            "kind": "리포트 카드",
             "cls": "note",
             "sub": "생산자의 원인 추정 · 선택 보관",
+            "targetType": "report",
+            "dependsOn": [],
         },
         {
             "id": "blocked",
@@ -599,6 +619,8 @@ def convert_excel_native(raw: dict[str, Any]) -> dict[str, Any]:
             "cls": "warn",
             "sub": "셀값만으로 인과관계는 확인 불가",
             "blocked": True,
+            "targetType": "blocked",
+            "dependsOn": [],
         },
     ]
 
