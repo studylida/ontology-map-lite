@@ -1,12 +1,13 @@
 // web/src/App.tsx
-import { useCallback, useEffect, useRef, useState } from "react";
-import { dismissAgentTask, fetchAgentTasks, fetchSubgraph, fetchTopDegreeNode, searchNodes } from "./api";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { dismissAgentTask, fetchAgentTasks, fetchSubgraph, fetchTopDegreeNode } from "./api";
 import { GraphCanvas, type GraphCanvasHandle } from "./GraphCanvas";
 import { SidePanel } from "./SidePanel";
 import { NodeSearch } from "./NodeSearch";
 import { KnowledgePopover } from "./KnowledgePopover";
 import { IngestionQueueNotice } from "./IngestionQueueNotice";
 import { KnowledgeIngestionModal } from "./KnowledgeIngestionModal";
+import { useInitialLoading } from "./useInitialLoading";
 import type {
   ExtractionTaskSummary,
   GraphEdge,
@@ -34,6 +35,26 @@ export function App() {
   const [modalMode, setModalMode] = useState<"input" | "review">("input");
   const [reviewTaskId, setReviewTaskId] = useState<string | null>(null);
 
+  // 2.5. 초기 로딩 화면 & 인트로 애니메이션 상태
+  const [graphReady, setGraphReady] = useState(false);
+  const LOADING_TIPS = useMemo(
+    () => [
+      "💡 노드를 클릭하면 해당 주제 중심으로 지식맵을 탐색할 수 있어요.",
+      "💡 빈 공간을 드래그해서 지도를 이동하고, 마우스 휠로 확대·축소해 보세요.",
+      "💡 간선을 클릭하면 두 개념이 연결된 이유와 근거를 확인할 수 있어요.",
+      "💡 노드 위에 마우스를 올리면 연결된 관계들이 하이라이트돼요.",
+    ],
+    [],
+  );
+  const [loadingTip] = useState(
+    () => LOADING_TIPS[Math.floor(Math.random() * LOADING_TIPS.length)],
+  );
+  const { progress: loadingProgress, phase: loadingPhase } = useInitialLoading(
+    graphReady,
+    error !== null,
+  );
+  const introStarted = graphReady && loadingPhase === "hidden";
+
   // 3. 중심 노드 변경 시 서브그래프 로드 (기존 탐색 노드는 ambient로 누적 보존)
   const loadGraph = useCallback(
     async (nodeId: number, unbounded: boolean = false) => {
@@ -41,6 +62,9 @@ export function App() {
       setError(null);
       try {
         const res = await fetchSubgraph(nodeId, unbounded);
+        if (res.nodes.length === 0) {
+          throw new Error("표시할 그래프 데이터가 없습니다.");
+        }
 
         // 새 서브그래프 데이터와 중심 노드 ID를 원자적으로 동시 갱신
         setCenterNodeId(nodeId);
@@ -79,32 +103,9 @@ export function App() {
         const center =
           res.nodes.find((n) => n.id === nodeId) ?? res.nodes[0] ?? null;
         setSelectedNode(center);
-      } catch (err: any) {
-        // 지정된 노드가 없을 경우(404 등), DB에 존재하는 유효 노드로 자동 폴백 복구
-        try {
-          const fallbackList = await searchNodes("");
-          const altNode = fallbackList.find((item) => item.id !== nodeId) || fallbackList[0];
-          if (altNode) {
-            const fallbackRes = await fetchSubgraph(altNode.id, unbounded);
-            setCenterNodeId(altNode.id);
-            setNodes(fallbackRes.nodes);
-            setEdges(fallbackRes.edges);
-            setHasOmitted(Boolean(fallbackRes.has_omitted));
-            setOmittedCount(fallbackRes.omitted_count ?? 0);
-            const center =
-              fallbackRes.nodes.find((n) => n.id === altNode.id) ??
-              fallbackRes.nodes[0] ??
-              null;
-            setSelectedNode(center);
-            setError(null);
-            return;
-          }
-        } catch {
-          // 폴백도 실패한 경우 아래 setError로 처리
-        }
-
+      } catch {
         setError(
-          err.message ?? "그래프 데이터를 불러오는 중 오류가 발생했습니다.",
+          "지식맵을 불러오지 못했습니다. 서버 연결 상태를 확인한 뒤 다시 시도해 주세요.",
         );
       } finally {
         setLoading(false);
@@ -118,23 +119,11 @@ export function App() {
     const initGraph = async () => {
       try {
         const topNode = await fetchTopDegreeNode();
-        if (topNode && topNode.id) {
-          await loadGraph(topNode.id);
-          return;
-        }
-      } catch (err) {
-        console.warn("fetchTopDegreeNode failed, falling back to search", err);
-      }
-
-      try {
-        const fallbackList = await searchNodes("");
-        if (fallbackList.length > 0) {
-          await loadGraph(fallbackList[0].id);
-          return;
-        }
-      } catch (err) {
-        console.error("No nodes found in system", err);
-        setError("시스템에 등록된 노드가 존재하지 않습니다.");
+        await loadGraph(topNode.id);
+      } catch {
+        setError(
+          "지식맵을 불러오지 못했습니다. 서버 연결 상태를 확인한 뒤 다시 시도해 주세요.",
+        );
       }
     };
 
@@ -173,6 +162,7 @@ export function App() {
 
   const handleSelectSearchedNode = useCallback(
     (item: NodeSearchItem) => {
+      canvasRef.current?.cancelIntro();
       loadGraph(item.id);
     },
     [loadGraph],
@@ -289,7 +279,11 @@ export function App() {
         {loading && (
           <div className={styles.overlayMessage}>그래프 로딩 중...</div>
         )}
-        {error && <div className={styles.errorMessage}>오류 발생: {error}</div>}
+        {error && loadingPhase === "hidden" && (
+          <div className={styles.errorMessage} role="alert">
+            {error}
+          </div>
+        )}
 
         <GraphCanvas
           ref={canvasRef}
@@ -299,6 +293,8 @@ export function App() {
           selectedNodeId={selectedNode?.id ?? null}
           onNodeClick={handleNodeClick}
           onPanBoundary={handlePanBoundary}
+          onReady={() => setGraphReady(true)}
+          introStarted={introStarted}
         />
       </main>
 
@@ -324,6 +320,41 @@ export function App() {
           }}
           onIngestionSuccess={handleIngestionSuccess}
         />
+      )}
+
+      {/* 초기 로딩 오버레이 */}
+      {loadingPhase !== "hidden" && (
+        <div
+          className={styles.loadingOverlay}
+          data-leaving={loadingPhase === "leaving"}
+        >
+          <div className={styles.loadingContent}>
+            <strong>Ontology Map Lite</strong>
+            {loadingPhase === "error" ? (
+              <div className={styles.loadingFailure} role="alert">
+                <p>{error}</p>
+                <button type="button" onClick={() => window.location.reload()}>
+                  다시 시도
+                </button>
+              </div>
+            ) : (
+              <>
+                <span>{loadingProgress}%</span>
+                <div
+                  className={styles.loadingTrack}
+                  role="progressbar"
+                  aria-label="지식맵 준비"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={loadingProgress}
+                >
+                  <i style={{ width: `${loadingProgress}%` }} />
+                </div>
+                <p className={styles.loadingTip}>{loadingTip}</p>
+              </>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

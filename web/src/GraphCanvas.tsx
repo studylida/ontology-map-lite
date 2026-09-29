@@ -30,6 +30,7 @@ export interface GraphCanvasHandle {
   zoomOut: () => void;
   fitToView: () => void;
   recenter: () => void;
+  cancelIntro: () => void;
 }
 
 interface GraphCanvasProps {
@@ -40,6 +41,8 @@ interface GraphCanvasProps {
   selectedNodeId: number | null;
   onNodeClick: (node: GraphNode) => void;
   onPanBoundary?: () => void;
+  onReady?: () => void;
+  introStarted?: boolean;
 }
 
 type LegacyTier = "center" | "direct" | "twoHop" | "threeHop" | "ambient";
@@ -652,6 +655,8 @@ export function GraphCanvas({
   selectedNodeId,
   onNodeClick,
   onPanBoundary,
+  onReady,
+  introStarted = false,
 }: GraphCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const graphRef = useRef<ForceGraph3DInstance<
@@ -670,12 +675,32 @@ export function GraphCanvas({
   const onPanBoundaryRef = useRef(onPanBoundary);
   onPanBoundaryRef.current = onPanBoundary;
 
+  const onReadyRef = useRef(onReady);
+  onReadyRef.current = onReady;
+
   const readyRef = useRef(false);
   const dataInitializedRef = useRef(false);
   const targetCenterRef = useRef<string | null>(null);
   const currentCenterRef = useRef<string | null>(null);
   const animationRef = useRef<number | null>(null);
   const hoverAnimationRef = useRef<number | null>(null);
+  const introCompletedRef = useRef(false);
+  const introAnimRef = useRef<number | null>(null);
+  const initialFrameRef = useRef<number | null>(null);
+  const initialPaintTimerRef = useRef<number | null>(null);
+
+  const cancelIntro = useCallback(() => {
+    if (!readyRef.current) return;
+    introCompletedRef.current = true;
+    if (introAnimRef.current !== null) {
+      cancelAnimationFrame(introAnimRef.current);
+      introAnimRef.current = null;
+    }
+    const labels = containerRef.current?.querySelector<HTMLElement>(
+      '[data-graph-labels="true"]',
+    );
+    if (labels) labels.style.opacity = "1";
+  }, []);
 
   const [hoveredRelation, setHoveredRelation] = useState<string | null>(null);
 
@@ -687,9 +712,8 @@ export function GraphCanvas({
     rawNodes[0]?.id ??
     null;
 
-  // 1. 카메라 핏 & 거리 계산 헬퍼
-  // 1. 카메라 핏 & 거리 계산 헬퍼 (항상 원점 0,0,0 중심 포커싱)
-  const fitCamera = useCallback((wide = false) => {
+  // 시작 연출과 일반 화면 맞춤에 같은 거리 계산을 사용한다.
+  const fitDistance = useCallback((wide = false) => {
     const graph = graphRef.current;
     if (!graph) return;
     const camera = graph.camera() as THREE.PerspectiveCamera;
@@ -719,16 +743,28 @@ export function GraphCanvas({
       ? distance * 1.5
       : Math.max(110, frontDepth + 36, distance * 0.95);
 
-    controls.target.set(0, 0, 0);
-    graph.cameraPosition(
-      { x: 0, y: 0, z: targetDistance },
-      { x: 0, y: 0, z: 0 },
-      800,
+    return THREE.MathUtils.clamp(
+      targetDistance, controls.minDistance, controls.maxDistance,
     );
   }, []);
 
+  const fitCamera = useCallback((wide = false) => {
+    const graph = graphRef.current;
+    const distance = fitDistance(wide);
+    if (!graph || distance === undefined) return;
+    cancelIntro();
+    const controls = graph.controls() as OrbitControls;
+    controls.target.set(0, 0, 0);
+    graph.cameraPosition(
+      { x: 0, y: 0, z: distance },
+      { x: 0, y: 0, z: 0 },
+      800,
+    );
+  }, [cancelIntro, fitDistance]);
+
   useImperativeHandle(ref, () => ({
     zoomIn: () => {
+      cancelIntro();
       const camera = graphRef.current?.camera() as THREE.PerspectiveCamera;
       const controls = graphRef.current?.controls() as OrbitControls;
       if (camera && controls) {
@@ -738,6 +774,7 @@ export function GraphCanvas({
       }
     },
     zoomOut: () => {
+      cancelIntro();
       const camera = graphRef.current?.camera() as THREE.PerspectiveCamera;
       const controls = graphRef.current?.controls() as OrbitControls;
       if (camera && controls) {
@@ -748,7 +785,8 @@ export function GraphCanvas({
     },
     fitToView: () => fitCamera(true),
     recenter: () => fitCamera(false),
-  }), [fitCamera]);
+    cancelIntro,
+  }), [cancelIntro, fitCamera]);
 
   // 2. Three.js 씬 초기화 & 포스트프로세싱 & OrbitControls 설정
   useEffect(() => {
@@ -761,6 +799,9 @@ export function GraphCanvas({
     labels.domElement.style.position = "absolute";
     labels.domElement.style.top = "0";
     labels.domElement.style.left = "0";
+    labels.domElement.style.opacity = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches ? "1" : "0";
 
     const renderLabels = labels.render.bind(labels);
     labels.render = (scene, camera) => {
@@ -850,6 +891,7 @@ export function GraphCanvas({
         updateLinkPosition(object, coordinates.start, coordinates.end),
       )
       .onNodeClick((node) => {
+        cancelIntro();
         onNodeClickRef.current?.(node.originalNode);
       })
       .onNodeHover((node) => {
@@ -894,6 +936,9 @@ export function GraphCanvas({
     controls.dampingFactor = 0.08;
     controls.minDistance = 95;
     controls.maxDistance = 2400;
+    controls.addEventListener("start", cancelIntro);
+    container.addEventListener("pointerdown", cancelIntro, true);
+    container.addEventListener("wheel", cancelIntro, { capture: true, passive: true });
 
     // 외곽 경계 패닝 감지기 연결
     const stopWatchingPan = watchBoundaryPan(
@@ -928,8 +973,6 @@ export function GraphCanvas({
     resize();
     const observer = new ResizeObserver(resize);
     observer.observe(container);
-
-    readyRef.current = true;
 
     // 400ms 부드러운 감속 호버 인터랙션 (neighborReveal)
     function highlightHover(nodeId: string | null, linkId: string | null) {
@@ -1050,6 +1093,20 @@ export function GraphCanvas({
     }
 
     return () => {
+      controls.removeEventListener("start", cancelIntro);
+      container.removeEventListener("pointerdown", cancelIntro, true);
+      container.removeEventListener("wheel", cancelIntro, true);
+      if (initialFrameRef.current !== null) {
+        cancelAnimationFrame(initialFrameRef.current);
+      }
+      if (initialPaintTimerRef.current !== null) {
+        window.clearTimeout(initialPaintTimerRef.current);
+      }
+      if (introAnimRef.current !== null) cancelAnimationFrame(introAnimRef.current);
+      initialFrameRef.current = null;
+      initialPaintTimerRef.current = null;
+      introAnimRef.current = null;
+      introCompletedRef.current = false;
       stopWatchingPan();
       observer.disconnect();
       if (animationRef.current !== null) {
@@ -1070,7 +1127,7 @@ export function GraphCanvas({
       nodeVisualsRef.current.clear();
       linkVisualsRef.current.clear();
     };
-  }, []);
+  }, [cancelIntro]);
 
   // 3. 데이터 변환 & 결정론적 슬롯 레이아웃 & 큐빅 보간 모션
   useEffect(() => {
@@ -1083,6 +1140,7 @@ export function GraphCanvas({
 
     // 중심 노드가 실제로 바뀌었을 때만 이전 애니메이션을 취소하고 새로운 전환 시작
     if (centerChanged) {
+      cancelIntro();
       if (animationRef.current !== null) {
         cancelAnimationFrame(animationRef.current);
         animationRef.current = null;
@@ -1272,7 +1330,8 @@ export function GraphCanvas({
       currentCenterRef.current = centerId;
 
       paint(1, false);
-      requestAnimationFrame(() => {
+      initialFrameRef.current = requestAnimationFrame(() => {
+        initialFrameRef.current = null;
         paint(1, false);
         alignLinks(
           linksRef.current,
@@ -1280,9 +1339,27 @@ export function GraphCanvas({
           nodeVisualsRef.current,
           nodesRef.current,
         );
-        fitCamera(false);
+        const distance = fitDistance();
+        if (distance === undefined) return;
+        const camera = graph.camera() as THREE.PerspectiveCamera;
+        const controls = graph.controls() as OrbitControls;
+        const reducedMotion = window.matchMedia(
+          "(prefers-reduced-motion: reduce)",
+        ).matches;
+        const startDistance = reducedMotion
+          ? distance
+          : Math.min(controls.maxDistance, distance * 3 / 0.95);
+        controls.target.set(0, 0, 0);
+        camera.position.set(0, 0, startDistance);
+        controls.update();
+        // 그래프 렌더링 준비 완료 신호를 App에 전달
+        if (!readyRef.current) {
+          readyRef.current = true;
+          onReadyRef.current?.();
+        }
       });
-      setTimeout(() => {
+      initialPaintTimerRef.current = window.setTimeout(() => {
+        initialPaintTimerRef.current = null;
         paint(1, false);
         alignLinks(
           linksRef.current,
@@ -1334,7 +1411,64 @@ export function GraphCanvas({
         nodesRef.current,
       );
     }
-  }, [rawNodes, rawEdges, activeCenterId, centerNodeId, fitCamera]);
+  }, [rawNodes, rawEdges, activeCenterId, centerNodeId, fitCamera, fitDistance, cancelIntro]);
+
+  // 그래프는 계속 보이고, 중간 쉼 구간에는 라벨만 등장한다.
+  useEffect(() => {
+    if (!introStarted || introCompletedRef.current) return;
+    const graph = graphRef.current;
+    const centerZ = fitDistance();
+    if (!graph || !readyRef.current || centerZ === undefined) return;
+    const camera = graph.camera() as THREE.PerspectiveCamera;
+    const controls = graph.controls() as OrbitControls;
+    const labels = containerRef.current?.querySelector<HTMLElement>(
+      '[data-graph-labels="true"]',
+    );
+
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      camera.position.set(0, 0, centerZ);
+      controls.target.set(0, 0, 0);
+      controls.update();
+      cancelIntro();
+      return;
+    }
+
+    const farZ = camera.position.z;
+    const overviewZ = Math.min(farZ, centerZ * 1.5 / 0.95);
+    let begun: number | undefined;
+    const interpolate = (from: number, to: number, t: number) =>
+      Math.exp(Math.log(from) + (Math.log(to) - Math.log(from)) * easeInOutCubic(t));
+
+    const frame = (now: number) => {
+      begun ??= now;
+      const elapsed = Math.min(2400, now - begun);
+      if (elapsed < 1000) {
+        camera.position.z = interpolate(farZ, overviewZ, elapsed / 1000);
+      } else if (elapsed < 1300) {
+        camera.position.z = overviewZ;
+        if (labels) {
+          labels.style.opacity = String(easeInOutCubic((elapsed - 1000) / 300));
+        }
+      } else {
+        camera.position.z = interpolate(overviewZ, centerZ, (elapsed - 1300) / 1100);
+        if (labels) labels.style.opacity = "1";
+      }
+      controls.update();
+
+      if (elapsed < 2400) {
+        introAnimRef.current = requestAnimationFrame(frame);
+      } else {
+        camera.position.z = centerZ;
+        cancelIntro();
+      }
+    };
+    introAnimRef.current = requestAnimationFrame(frame);
+    return () => {
+      if (introAnimRef.current !== null) cancelAnimationFrame(introAnimRef.current);
+      introAnimRef.current = null;
+      if (labels) labels.style.opacity = "1";
+    };
+  }, [introStarted, fitDistance, cancelIntro]);
 
   return (
     <section className={styles.map} aria-label="3D 온톨로지 지식맵">
