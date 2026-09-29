@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 ROOT = Path(__file__).resolve().parents[1]
-SCHEMA_PATH = Path("server/src/ontology_map/db/metadata.py")
+SCHEMA_PATH = Path("server/src/ontology_map/db/schema.py")
 REFERENCE_PATH = Path("docs/data/schema-reference.md")
 DECISIONS_PATH = Path("docs/architecture/decisions")
 SKIPPED_DIRECTORIES = {
@@ -51,9 +51,9 @@ CHECK_COMMAND = "uv run --project server --frozen python scripts/check_docs.py -
 
 def load_metadata(root: Path) -> sa.MetaData:
     namespace = runpy.run_path(str(root / SCHEMA_PATH))
-    metadata = namespace.get("metadata")
+    metadata = namespace["Base"].metadata
     if not isinstance(metadata, sa.MetaData):
-        raise RuntimeError(f"{SCHEMA_PATH}에서 SQLAlchemy metadata를 찾지 못했습니다.")
+        raise TypeError(f"{SCHEMA_PATH}에서 SQLAlchemy metadata를 찾지 못했습니다.")
     return metadata
 
 
@@ -176,7 +176,11 @@ def render_table(table: sa.Table) -> list[str]:
     )
     constraints = sorted(
         table.constraints,
-        key=lambda value: (constraint_kind(value), value.name or ""),
+        key=lambda value: (
+            constraint_kind(value),
+            value.name or "",
+            constraint_definition(value),
+        ),
     )
     for constraint in constraints:
         lines.append(
@@ -217,10 +221,12 @@ def render_schema_reference(metadata: sa.MetaData) -> str:
         "",
         "# ontology-map PostgreSQL 스키마 참고 문서",
         "",
-        "이 문서는 [완성 SQLAlchemy metadata](../../server/src/ontology_map/db/metadata.py)의 "
-        "실제 table, column, constraint와 index를 이름순으로 보여 주는 생성 결과다. "
-        "데이터 의미와 수명주기는 [논리 스키마](logical-schema.md), PostgreSQL 공통 "
-        "표현 규칙은 [물리 스키마](physical-schema.md)가 소유한다.",
+        (
+            "이 문서는 [SQLAlchemy 모델](../../server/src/ontology_map/db/schema.py)의 "
+            "실제 table, column, constraint와 index를 이름순으로 보여 주는 생성 결과다. "
+            "현재 구성과 테이블 역할은 [아키텍처](../ARCHITECTURE.md)가 설명한다. "
+            "운영 DB를 조회한 결과가 아니라 Base.metadata에 선언된 스키마다."
+        ),
         "",
         f"- table 수: {len(tables)}",
         f"- 생성 명령: {BACKTICK}{WRITE_COMMAND}{BACKTICK}",
@@ -473,6 +479,9 @@ def check_adr_relationships(
     records: dict[str, tuple[Path, dict[str, str]]],
 ) -> list[str]:
     errors: list[str] = []
+    # 경량화 이후 ADR이 없는 저장소에는 색인을 요구하지 않는다.
+    if not records and not (root / DECISIONS_PATH).exists():
+        return errors
     index_path = root / DECISIONS_PATH / "README.md"
     if not index_path.exists():
         return [f"{DECISIONS_PATH}/README.md: ADR 색인이 없습니다."]
@@ -534,8 +543,10 @@ def check_schema_reference(root: Path, expected_reference: str) -> list[str]:
     ):
         return []
     return [
-        f"{REFERENCE_PATH}: SQLAlchemy metadata와 다릅니다. "
-        "scripts/check_docs.py --write로 갱신하세요."
+        (
+            f"{REFERENCE_PATH}: SQLAlchemy metadata와 다릅니다. "
+            "scripts/check_docs.py --write로 갱신하세요."
+        )
     ]
 
 
@@ -567,6 +578,7 @@ def main() -> int:
     expected_reference = render_schema_reference(metadata)
     if args.write:
         destination = ROOT / REFERENCE_PATH
+        destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_text(expected_reference, encoding="utf-8")
         print(
             f"{destination.relative_to(ROOT)} 갱신 완료: table {len(metadata.tables)}개"

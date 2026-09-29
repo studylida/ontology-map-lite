@@ -1,4 +1,6 @@
-# ontology-map 데모 인계
+# 경량화 이전 ontology-map 데모 인계
+
+이 문서는 2026-09-21 데모의 역사 기록이다. 이후 스키마와 서비스가 경량화되었으므로 아래 포트·테이블·처리 경로를 현재 실행 지침으로 사용하지 않는다. 현재 실행 방법은 [README](README.md), 구성은 [아키텍처](docs/ARCHITECTURE.md)를 따른다.
 
 > 확인일: 2026-09-21. 이 인계는 `origin/main` `526f5f7`에 재기반한 PR #246과 5179 web·8015 API 데모 상태를 기준으로 한다. 정확한 병합 commit과 CI 상태는 PR #246을 확인한다.
 
@@ -28,15 +30,13 @@
 
 ## 운영 시 주의할 점
 
-- migration은 API 시작 시 자동 적용하지 않는다. [DB 운영](docs/operations/database.md)의 명시적 절차를 사용한다.
+- migration은 API 시작 시 자동 적용하지 않는다. 현재 실행 안내는 [README](README.md#로컬-실행)를 확인한다.
 - worker 함수가 존재하는 것과 운영 queue·다중 프로세스 복구가 준비됐다는 것은 다르다. 현재 worker는 FastAPI 프로세스 안에서 최대 4개로 실행된다.
 - source 문서나 provider 응답, credential과 비용 원장은 Git이나 제품 DB에 넣지 않는다.
 - 새 Node 병합은 source·대표 유형과 redirect graph 전체를 다시 검증하고 하나의 transaction으로 적용한다.
 
-## 정식 문서
+## 현재 문서
 
-- 현재 실행 구조: [아키텍처](docs/architecture/README.md)
-- 런타임·모델·worker: [구현 스택](docs/development/implementation-stack.md)
-- 화면 행동: [제품 설계](docs/product/design.md)
-- 데이터 의미와 DB 표현: [논리 스키마](docs/data/logical-schema.md), [물리 스키마](docs/data/physical-schema.md)
-- 로컬 실행·검증·복구: [DB 운영](docs/operations/database.md)
+- 현재 실행 구조와 화면 행동: [아키텍처](docs/ARCHITECTURE.md)
+- 모델의 DB 표현: [스키마 참고 문서](docs/data/schema-reference.md)
+- 로컬 실행과 검증: [README](README.md)

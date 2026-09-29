@@ -1,6 +1,9 @@
 # Ontology Map Lite Architecture
 
 ## 1. 8 Core Tables
+
+현재 스키마의 단일 정의는 [schema.py](../server/src/ontology_map/db/schema.py)의 `Base.metadata`다. Alembic과 문서 생성기는 이 정의를 사용한다. 컬럼·제약·인덱스는 [자동 생성 스키마 참고 문서](data/schema-reference.md)에서 확인한다. 문서 검사는 운영 DB에 연결하지 않으며 테이블을 생성하거나 변경하지 않는다.
+
 - **classifications**: 온톨로지 분류 체계 (COMPANY, TECH, PERSON 등)
 - **relations**: 엔티티 간 관계 정의 (INVESTS_IN, DEVELOPS, LEADS 등)
 - **documents**: 원천 텍스트 및 지식 출처 문서

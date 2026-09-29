@@ -61,7 +61,7 @@ Pull Request를 열면 Issue에 링크를 남기고 리뷰 중에도 `status: in
 
 ## 문서
 
-루트에는 진입 문서인 `README.md`, 기여 규칙인 `CONTRIBUTING.md`와 새 세션 인계에만 쓰는 임시 `HANDOFF.md`를 둔다. 활성 정식 문서는 [문서 안내](docs/README.md)에 등록하고 제품·아키텍처·데이터·운영·개발 책임에 맞는 `docs/` 하위 경로에서 관리한다.
+루트에는 진입 문서인 `README.md`와 기여 규칙인 `CONTRIBUTING.md`를 둔다. 현재 구성은 [아키텍처](docs/ARCHITECTURE.md), 모델의 상세 구조는 [생성 스키마 참고 문서](docs/data/schema-reference.md)가 설명하며 README에서 안내한다. `HANDOFF.md`는 경량화 이전 데모의 역사 기록이다.
 
 새 주제별 Markdown 파일을 만들기 전에 기존 정식 문서의 절로 합칠 수 있는지 확인한다. 완료된 계획, 과거 인계, 대화 기록과 Issue별 설계 메모는 필요한 현재 결론을 정식 문서에 반영한 뒤 `archive/`로 옮긴다. 후속 계획과 미결정 사항은 Markdown 파일이 아니라 GitHub Issue에서 관리한다.
 
@@ -71,7 +71,7 @@ Pull Request를 열면 Issue에 링크를 남기고 리뷰 중에도 `status: in
 
 역사 문서가 현재 계약과 충돌하면 frozen schema, 병합된 코드와 최신 GitHub 결정 순으로 확인한다. 파일 이동은 `git mv`를 사용하고 저장소 내부 상대 링크를 함께 갱신한다.
 
-데이터 의미, 엔터티, 관계, 카디널리티, 소유권이나 수명주기를 바꾸는 PR은 [논리 스키마](docs/data/logical-schema.md)를 함께 갱신한다. SQLAlchemy metadata를 바꾸는 PR은 다음 명령으로 [스키마 참고 문서](docs/data/schema-reference.md)를 재생성한다.
+데이터 의미, 엔터티, 관계, 카디널리티, 소유권이나 수명주기를 바꾸는 PR은 [아키텍처](docs/ARCHITECTURE.md)의 해당 설명을 함께 갱신한다. SQLAlchemy 모델을 바꾸는 PR은 다음 명령으로 [스키마 참고 문서](docs/data/schema-reference.md)를 재생성한다.
 
 ```bash
 uv run --project server --frozen python scripts/check_docs.py --write
@@ -87,7 +87,7 @@ uv run --project server --frozen python scripts/check_docs.py --write
 
 작은 UI 문구, 국소적인 bug 수정, 내부 refactor와 단순 필드 추가에는 ADR을 요구하지 않는다. Issue는 대안을 논의하는 곳이고 ADR은 구현 PR에서 받아들인 결정의 기록이다. `proposed` ADR은 만들지 않으며 PR 병합을 수용으로 본다. 기존 결정을 대체할 때는 새 ADR을 만들고 기존 ADR을 `superseded`로 바꾸어 `current/`에서 `superseded/`로 옮긴 뒤 두 문서의 `supersedes`와 `superseded_by`를 서로 연결한다. 이전 경로에 안내 파일을 남기지 않고 모든 현재 문서 링크를 새 결정으로 갱신한다.
 
-Pull Request를 열기 전에 다음 검사로 생성 문서, 저장소 내부 Markdown 링크와 ADR 메타데이터·색인·대체 관계를 확인한다.
+Pull Request를 열기 전에 다음 검사로 생성 문서, 저장소 내부 Markdown 링크와 ADR 메타데이터·색인·대체 관계를 확인한다. 현재 경량화 저장소에는 ADR 디렉터리가 없다. ADR을 작성하면 기존 `docs/architecture/decisions/` 구조와 색인 규칙을 따르며, 디렉터리나 ADR이 존재하는데 색인이 빠진 경우에는 검사가 실패한다.
 
 ```bash
 uv run --project server --frozen python scripts/check_docs.py --check

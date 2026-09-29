@@ -21,3 +21,5 @@ jobs:
           enable-cache: true
       - name: 생성 문서·링크·ADR 검사
         run: uv run --project server --frozen python scripts/check_docs.py --check
+      - name: 문서 검사 회귀 테스트
+        run: uv run --project server --frozen pytest -q scripts/test_check_docs.py
