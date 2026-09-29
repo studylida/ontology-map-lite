@@ -54,8 +54,11 @@ def extract_ontology_from_text(
     url = (base_url or DEFAULT_OPENAI_BASE_URL).rstrip("/")
     target_model = model or DEFAULT_MODEL
 
-    # 컨텍스트 과다 입력 방지 (최대 15,000자 제한)
-    trimmed_content = content[:15000]
+    # 상한선: 50,000자 초과 시 명시적 거절 (지시서 4절)
+    if len(content) > 50000:
+        raise ValueError(f"문서 본문이 상한선(50,000자)을 초과했습니다: {len(content)}자")
+
+    trimmed_content = content
 
     cross_link_instruction = ""
     if existing_entities and len(existing_entities) > 0:
@@ -68,7 +71,6 @@ def extract_ontology_from_text(
 문서 분석 시, 새로 발견된 엔티티가 기존 엔티티들과 관계(예: 투자, 파트너십, 공급, 인물 소속, 기술 적용 등)를 맺고 있거나 합리적 연계점(Cross-Link)이 있다면:
 - "edges" 항목에 기존 엔티티와의 연결 관계를 적극적으로 포함하세요 (source_name 또는 target_name에 기존 엔티티명 지정).
 - 단, 문서 맥락상 근거가 명확한 관계만 연결하세요.
-- (참고: 향후 고도화 단계에서는 JEV(TypeSafe Jev)가 엄격한 교차 검증 및 환각 필터링을 수행할 예정입니다.)
 """
 
     user_prompt = f"""[문서 제목]: {title}
@@ -98,7 +100,6 @@ def extract_ontology_from_text(
             {"role": "user", "content": user_prompt},
         ],
         "response_format": {"type": "json_object"},
-        "temperature": 0.1,
     }
 
     with httpx.Client(timeout=30.0) as client:
@@ -111,14 +112,108 @@ def extract_ontology_from_text(
 
     parsed: dict[str, Any] = json.loads(cleaned_json_str)
 
-    # IntakePayload 객체로 변환하여 반환
+    # 1. Claims 파싱 및 오프셋 계산, ref_id 부여
+    claim_items: list[IntakeClaim] = []
+    raw_claims = parsed.get("claims", [])
+    for idx, c in enumerate(raw_claims):
+        quote = c.get("quote", "").strip()
+        start_offset = None
+        end_offset = None
+        if quote and quote in content:
+            start_offset = content.find(quote)
+            end_offset = start_offset + len(quote)
+
+        claim_items.append(
+            IntakeClaim(
+                ref_id=f"c{idx}",
+                quote=quote,
+                claim_text=c.get("claim_text") or quote,
+                confidence=float(c.get("confidence", 1.0)),
+                start_offset=start_offset,
+                end_offset=end_offset,
+            )
+        )
+
+    # 2. Nodes 파싱 및 ref_id 부여 (임시 참조 ID와 이름 분리)
+    node_items: list[IntakeNode] = []
+    name_to_ref: dict[str, str] = {}
+    for idx, n in enumerate(parsed.get("nodes", [])):
+        ref_id = f"n{idx}"
+        name = str(n.get("name", "")).strip()
+        name_to_ref[name.lower()] = ref_id
+        node_items.append(
+            IntakeNode(
+                ref_id=ref_id,
+                name=name,
+                classification=n.get("classification", "GENERAL"),
+                description=n.get("description"),
+                properties=n.get("properties") or {},
+            )
+        )
+
+    # 3. Edges 파싱: source_ref, target_ref, claim_ref 정렬
+    edge_items: list[IntakeEdge] = []
+    first_claim_ref = claim_items[0].ref_id if claim_items else None
+    for idx, e in enumerate(parsed.get("edges", [])):
+        s_name = str(e.get("source_name", "")).strip()
+        t_name = str(e.get("target_name", "")).strip()
+        s_ref = name_to_ref.get(s_name.lower())
+        t_ref = name_to_ref.get(t_name.lower())
+
+        # 해당 엣지의 source 및 target이 언급된 실제 Claim 탐색
+        matched_c_ref = None
+        s_lower = s_name.lower()
+        t_lower = t_name.lower()
+
+        # 1순위: source와 target 모두 언급된 Claim
+        for c in claim_items:
+            q_lower = c.quote.lower()
+            stmt_lower = (c.claim_text or "").lower()
+            if (s_lower in q_lower or s_lower in stmt_lower) and (t_lower in q_lower or t_lower in stmt_lower):
+                matched_c_ref = c.ref_id
+                break
+
+        # 2순위: target이 언급된 Claim (target이 구체적 제품/기술인 경우가 많음)
+        if not matched_c_ref:
+            for c in claim_items:
+                q_lower = c.quote.lower()
+                stmt_lower = (c.claim_text or "").lower()
+                if t_lower in q_lower or t_lower in stmt_lower:
+                    matched_c_ref = c.ref_id
+                    break
+
+        # 3순위: source가 언급된 Claim
+        if not matched_c_ref:
+            for c in claim_items:
+                q_lower = c.quote.lower()
+                stmt_lower = (c.claim_text or "").lower()
+                if s_lower in q_lower or s_lower in stmt_lower:
+                    matched_c_ref = c.ref_id
+                    break
+
+        final_c_ref = matched_c_ref or first_claim_ref
+
+        edge_items.append(
+            IntakeEdge(
+                source_ref=s_ref,
+                target_ref=t_ref,
+                source_name=s_name,
+                target_name=t_name,
+                relation=e.get("relation", "RELATED_TO"),
+                claim_ref=final_c_ref,
+                claim_refs=[final_c_ref] if final_c_ref else [],
+                properties=e.get("properties") or {},
+            )
+        )
+
+    # 전체 정규화 본문 및 출처 보존 (지시서 M1)
     return IntakePayload(
         source_project="agent-ingestion",
         document_title=title,
-        document_content=trimmed_content[:2000],  # DB 저장용 축약
+        document_content=content,
         document_uri=None,
-        nodes=[IntakeNode(**n) for n in parsed.get("nodes", [])],
-        edges=[IntakeEdge(**e) for e in parsed.get("edges", [])],
-        claims=[IntakeClaim(**c) for c in parsed.get("claims", [])],
+        nodes=node_items,
+        edges=edge_items,
+        claims=claim_items,
         insights=parsed.get("insights", {}),
     )
