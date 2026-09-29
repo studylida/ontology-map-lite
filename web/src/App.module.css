@@ -170,3 +170,66 @@
   color: #ffffff;
   border-color: #f59e0b;
 }
+
+/* ── 로딩 오버레이 ── */
+.loadingOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  color: #f1f5f9;
+  background: #0b0f14;
+  opacity: 1;
+  transition: opacity 200ms ease-out;
+}
+
+.loadingOverlay[data-leaving="true"] {
+  pointer-events: none;
+  opacity: 0;
+}
+
+.loadingContent {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+}
+
+.loadingContent strong {
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+}
+
+.loadingContent > span {
+  color: #8fa6c4;
+  font-size: 11px;
+  font-family: "SF Mono", "Cascadia Code", "Consolas", monospace;
+  letter-spacing: 0.08em;
+}
+
+.loadingTrack {
+  width: 240px;
+  height: 2px;
+  margin-top: 4px;
+  overflow: hidden;
+  background: #1b2531;
+}
+
+.loadingTrack i {
+  display: block;
+  height: 100%;
+  background: #38bdf8;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.42);
+}
+
+.loadingTip {
+  max-width: min(480px, calc(100vw - 48px));
+  min-height: 2.8em;
+  margin: 16px 0 0;
+  color: #8fa6c4;
+  font-size: 13px;
+  line-height: 1.4;
+  text-align: center;
+  word-break: keep-all;
+}

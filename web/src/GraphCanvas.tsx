@@ -40,6 +40,8 @@ interface GraphCanvasProps {
   selectedNodeId: number | null;
   onNodeClick: (node: GraphNode) => void;
   onPanBoundary?: () => void;
+  onReady?: () => void;
+  introStarted?: boolean;
 }
 
 type LegacyTier = "center" | "direct" | "twoHop" | "threeHop" | "ambient";
@@ -652,6 +654,8 @@ export function GraphCanvas({
   selectedNodeId,
   onNodeClick,
   onPanBoundary,
+  onReady,
+  introStarted = false,
 }: GraphCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const graphRef = useRef<ForceGraph3DInstance<
@@ -670,12 +674,17 @@ export function GraphCanvas({
   const onPanBoundaryRef = useRef(onPanBoundary);
   onPanBoundaryRef.current = onPanBoundary;
 
+  const onReadyRef = useRef(onReady);
+  onReadyRef.current = onReady;
+
   const readyRef = useRef(false);
   const dataInitializedRef = useRef(false);
   const targetCenterRef = useRef<string | null>(null);
   const currentCenterRef = useRef<string | null>(null);
   const animationRef = useRef<number | null>(null);
   const hoverAnimationRef = useRef<number | null>(null);
+  const introCompletedRef = useRef(false);
+  const introAnimRef = useRef<number | null>(null);
 
   const [hoveredRelation, setHoveredRelation] = useState<string | null>(null);
 
@@ -1280,7 +1289,34 @@ export function GraphCanvas({
           nodeVisualsRef.current,
           nodesRef.current,
         );
-        fitCamera(false);
+        // 인트로 애니메이션을 위해 카메라를 먼 곳에 배치 (3× fit distance)
+        if (!introCompletedRef.current) {
+          const camera = graph.camera() as THREE.PerspectiveCamera;
+          const controls = graph.controls() as OrbitControls;
+          const tangent = Math.tan((camera.fov * Math.PI) / 360);
+          const horizontal = (tangent * graph.width()) / graph.height();
+          let dist = Math.max(160, 48 / horizontal, 48 / tangent);
+          for (const node of nodesRef.current.values()) {
+            if (node.tier !== "center" && node.tier !== "direct") continue;
+            const pos = { x: node.x ?? 0, y: node.y ?? 0, z: node.z ?? 0 };
+            dist = Math.max(
+              dist,
+              pos.z + (Math.abs(pos.x) + 40) / horizontal,
+              pos.z + (Math.abs(pos.y) + 40) / tangent,
+            );
+          }
+          const farDistance = dist * 3;
+          controls.target.set(0, 0, 0);
+          camera.position.set(0, 0, farDistance);
+          controls.update();
+        } else {
+          fitCamera(false);
+        }
+        // 그래프 렌더링 준비 완료 신호를 App에 전달
+        if (!readyRef.current) {
+          readyRef.current = true;
+          onReadyRef.current?.();
+        }
       });
       setTimeout(() => {
         paint(1, false);
@@ -1335,6 +1371,101 @@ export function GraphCanvas({
       );
     }
   }, [rawNodes, rawEdges, activeCenterId, centerNodeId, fitCamera]);
+
+  // ── 2단계 인트로 줌 애니메이션 ──
+  // introStarted가 true가 되면 로딩 오버레이가 사라지고 카메라 줌인이 시작된다.
+  // Stage 1 (0~1000ms): Far → Overview (중간 거리)
+  // Pause  (1000~1300ms): 라벨 페이드인
+  // Stage 2 (1300~2400ms): Overview → Center (최종 핏)
+  useEffect(() => {
+    if (!introStarted || introCompletedRef.current) return;
+    const graph = graphRef.current;
+    if (!graph || !dataInitializedRef.current) return;
+
+    const camera = graph.camera() as THREE.PerspectiveCamera;
+    const controls = graph.controls() as OrbitControls;
+    const labelLayer = containerRef.current?.querySelector(
+      "div[style]",
+    ) as HTMLDivElement | null;
+
+    // 거리 계산 헬퍼
+    const tangent = Math.tan((camera.fov * Math.PI) / 360);
+    const horizontal = (tangent * graph.width()) / graph.height();
+    let baseDist = Math.max(160, 48 / horizontal, 48 / tangent);
+    for (const node of nodesRef.current.values()) {
+      if (node.tier !== "center" && node.tier !== "direct") continue;
+      const pos = { x: node.x ?? 0, y: node.y ?? 0, z: node.z ?? 0 };
+      baseDist = Math.max(
+        baseDist,
+        pos.z + (Math.abs(pos.x) + 40) / horizontal,
+        pos.z + (Math.abs(pos.y) + 40) / tangent,
+      );
+    }
+
+    const farZ = camera.position.z; // 현재 먼 위치
+    const overviewZ = baseDist * 1.5; // 중간 개요 거리
+    const centerZ = Math.max(110, baseDist * 0.95); // 최종 핏 거리
+
+    if (labelLayer) labelLayer.style.opacity = "0";
+
+    const begun = performance.now();
+    const STAGE1 = 1000;
+    const PAUSE = 300;
+    const STAGE2 = 1100;
+    const TOTAL = STAGE1 + PAUSE + STAGE2;
+
+    const frame = (now: number) => {
+      const elapsed = now - begun;
+      const progress = Math.min(1, elapsed / TOTAL);
+
+      if (elapsed <= STAGE1) {
+        // Stage 1: Far → Overview
+        const t = easeInOutCubic(elapsed / STAGE1);
+        const z = Math.exp(
+          Math.log(farZ) + (Math.log(overviewZ) - Math.log(farZ)) * t,
+        );
+        camera.position.set(0, 0, z);
+        controls.update();
+      } else if (elapsed <= STAGE1 + PAUSE) {
+        // Pause: 라벨 페이드인
+        const t = (elapsed - STAGE1) / PAUSE;
+        if (labelLayer) labelLayer.style.opacity = String(easeInOutCubic(t));
+      } else {
+        // Stage 2: Overview → Center
+        const stageElapsed = elapsed - STAGE1 - PAUSE;
+        const t = easeInOutCubic(Math.min(1, stageElapsed / STAGE2));
+        const z = Math.exp(
+          Math.log(overviewZ) +
+            (Math.log(centerZ) - Math.log(overviewZ)) * t,
+        );
+        camera.position.set(0, 0, z);
+        controls.update();
+        if (labelLayer) labelLayer.style.opacity = "1";
+      }
+
+      if (progress < 1) {
+        introAnimRef.current = requestAnimationFrame(frame);
+      } else {
+        introAnimRef.current = null;
+        introCompletedRef.current = true;
+        if (labelLayer) labelLayer.style.opacity = "1";
+        fitCamera(false);
+      }
+    };
+
+    // 약간의 딜레이 후 시작 (로딩 오버레이 페이드아웃 완료 대기)
+    const delay = window.setTimeout(() => {
+      introAnimRef.current = requestAnimationFrame(frame);
+    }, 240);
+
+    return () => {
+      window.clearTimeout(delay);
+      if (introAnimRef.current !== null) {
+        cancelAnimationFrame(introAnimRef.current);
+        introAnimRef.current = null;
+      }
+    };
+  }, [introStarted, fitCamera]);
 
   return (
     <section className={styles.map} aria-label="3D 온톨로지 지식맵">
