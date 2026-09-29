@@ -1,5 +1,5 @@
 // web/src/App.tsx
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { dismissAgentTask, fetchAgentTasks, fetchSubgraph, fetchTopDegreeNode, searchNodes } from "./api";
 import { GraphCanvas, type GraphCanvasHandle } from "./GraphCanvas";
 import { SidePanel } from "./SidePanel";
@@ -7,7 +7,6 @@ import { NodeSearch } from "./NodeSearch";
 import { KnowledgePopover } from "./KnowledgePopover";
 import { IngestionQueueNotice } from "./IngestionQueueNotice";
 import { KnowledgeIngestionModal } from "./KnowledgeIngestionModal";
-import { useInitialLoading } from "./useInitialLoading";
 import type {
   ExtractionTaskSummary,
   GraphEdge,
@@ -34,26 +33,6 @@ export function App() {
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [modalMode, setModalMode] = useState<"input" | "review">("input");
   const [reviewTaskId, setReviewTaskId] = useState<string | null>(null);
-
-  // 2.5. 초기 로딩 화면 & 인트로 애니메이션 상태
-  const [graphReady, setGraphReady] = useState(false);
-  const LOADING_TIPS = useMemo(
-    () => [
-      "💡 노드를 클릭하면 해당 주제 중심으로 지식맵을 탐색할 수 있어요.",
-      "💡 빈 공간을 드래그해서 지도를 이동하고, 마우스 휠로 확대·축소해 보세요.",
-      "💡 간선을 클릭하면 두 개념이 연결된 이유와 근거를 확인할 수 있어요.",
-      "💡 노드 위에 마우스를 올리면 연결된 관계들이 하이라이트돼요.",
-    ],
-    [],
-  );
-  const [loadingTip] = useState(
-    () => LOADING_TIPS[Math.floor(Math.random() * LOADING_TIPS.length)],
-  );
-  const { progress: loadingProgress, phase: loadingPhase } = useInitialLoading(
-    graphReady,
-    error !== null,
-  );
-  const introStarted = loadingPhase === "hidden";
 
   // 3. 중심 노드 변경 시 서브그래프 로드 (기존 탐색 노드는 ambient로 누적 보존)
   const loadGraph = useCallback(
@@ -320,8 +299,6 @@ export function App() {
           selectedNodeId={selectedNode?.id ?? null}
           onNodeClick={handleNodeClick}
           onPanBoundary={handlePanBoundary}
-          onReady={() => setGraphReady(true)}
-          introStarted={introStarted}
         />
       </main>
 
@@ -347,23 +324,6 @@ export function App() {
           }}
           onIngestionSuccess={handleIngestionSuccess}
         />
-      )}
-
-      {/* 초기 로딩 오버레이 */}
-      {loadingPhase !== "hidden" && (
-        <div
-          className={styles.loadingOverlay}
-          data-leaving={loadingPhase === "leaving"}
-        >
-          <div className={styles.loadingContent}>
-            <strong>Ontology Map Lite</strong>
-            <span>{loadingProgress}%</span>
-            <div className={styles.loadingTrack}>
-              <i style={{ width: `${loadingProgress}%` }} />
-            </div>
-            <p className={styles.loadingTip}>{loadingTip}</p>
-          </div>
-        </div>
       )}
     </div>
   );
