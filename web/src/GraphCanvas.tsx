@@ -242,7 +242,9 @@ function radiusFor(node: RuntimeNode): number {
 }
 
 function makeLabel(node: RuntimeNode): CSS2DObject {
-  const element = document.createElement("span");
+  const element = document.createElement("button");
+  element.type = "button";
+  element.setAttribute("aria-label", `${node.name} 중심으로 이동`);
   element.className = styles.nodeLabel ?? "";
   element.textContent = node.name;
   element.dataset.nodeId = String(node.id);
@@ -890,10 +892,6 @@ export function GraphCanvas({
       .linkPositionUpdate((object, coordinates) =>
         updateLinkPosition(object, coordinates.start, coordinates.end),
       )
-      .onNodeClick((node) => {
-        cancelIntro();
-        onNodeClickRef.current?.(node.originalNode);
-      })
       .onNodeHover((node) => {
         container.style.cursor = node ? "pointer" : "grab";
         highlightHover(node ? String(node.id) : null, null);
@@ -936,8 +934,76 @@ export function GraphCanvas({
     controls.dampingFactor = 0.08;
     controls.minDistance = 95;
     controls.maxDistance = 2400;
+
+    // 기본 클릭 판정은 미세한 마우스 이동도 드래그로 취급한다.
+    // 노드와 이름표는 같은 클릭 경로를 사용하고, 실제 드래그만 제외한다.
+    let pointerStart: { id: number; x: number; y: number } | null = null;
+    let pressedNodeId: string | undefined;
+    let dragged = false;
+    const raycaster = new THREE.Raycaster();
+    const nodeIdAt = (event: MouseEvent): string | undefined => {
+      const label = event.target instanceof Element
+        ? event.target.closest<HTMLElement>("button[data-node-id]")
+        : null;
+      if (label) return label.dataset.nodeId;
+      const camera = graph.camera();
+      const bounds = graph.renderer().domElement.getBoundingClientRect();
+      if (!bounds.width || !bounds.height) return;
+      camera.updateMatrixWorld();
+      graph.scene().updateMatrixWorld(true);
+      raycaster.setFromCamera(
+        new THREE.Vector2(
+          (event.clientX - bounds.left) / bounds.width * 2 - 1,
+          -(event.clientY - bounds.top) / bounds.height * 2 + 1,
+        ),
+        camera,
+      );
+      const hit = raycaster.intersectObjects(
+        [...nodeVisualsRef.current.values()], true,
+      )[0];
+      return hit?.object.parent?.userData.nodeId;
+    };
+    const startSelection = (event: PointerEvent) => {
+      cancelIntro();
+      dragged = !event.isPrimary || event.button !== 0;
+      pointerStart = dragged ? null : {
+        id: event.pointerId, x: event.clientX, y: event.clientY,
+      };
+      pressedNodeId = dragged ? undefined : nodeIdAt(event);
+    };
+    const trackSelection = (event: PointerEvent) => {
+      if (!pointerStart || pointerStart.id !== event.pointerId) return;
+      const distance = Math.hypot(
+        event.clientX - pointerStart.x, event.clientY - pointerStart.y,
+      );
+      if (distance > 5) {
+        dragged = true;
+      }
+    };
+    const endSelection = (event: PointerEvent) => {
+      trackSelection(event);
+      pointerStart = null;
+    };
+    const cancelSelection = () => {
+      pointerStart = null;
+      pressedNodeId = undefined;
+      dragged = true;
+    };
+    const selectNode = (event: MouseEvent) => {
+      if (event.button !== 0 || (event.detail !== 0 && dragged)) return;
+      const id = event.detail === 0 ? nodeIdAt(event) : pressedNodeId;
+      pressedNodeId = undefined;
+      const node = id === undefined ? undefined : nodesRef.current.get(id);
+      if (!node) return;
+      cancelIntro();
+      onNodeClickRef.current(node.originalNode);
+    };
     controls.addEventListener("start", cancelIntro);
-    container.addEventListener("pointerdown", cancelIntro, true);
+    container.addEventListener("pointerdown", startSelection, true);
+    container.addEventListener("pointermove", trackSelection, true);
+    container.addEventListener("pointerup", endSelection, true);
+    container.addEventListener("pointercancel", cancelSelection, true);
+    container.addEventListener("click", selectNode);
     container.addEventListener("wheel", cancelIntro, { capture: true, passive: true });
 
     // 외곽 경계 패닝 감지기 연결
@@ -1094,7 +1160,11 @@ export function GraphCanvas({
 
     return () => {
       controls.removeEventListener("start", cancelIntro);
-      container.removeEventListener("pointerdown", cancelIntro, true);
+      container.removeEventListener("pointerdown", startSelection, true);
+      container.removeEventListener("pointermove", trackSelection, true);
+      container.removeEventListener("pointerup", endSelection, true);
+      container.removeEventListener("pointercancel", cancelSelection, true);
+      container.removeEventListener("click", selectNode);
       container.removeEventListener("wheel", cancelIntro, true);
       if (initialFrameRef.current !== null) {
         cancelAnimationFrame(initialFrameRef.current);

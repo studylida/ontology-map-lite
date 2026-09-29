@@ -6,7 +6,7 @@ import {
   screen,
 } from "@testing-library/react";
 import { createRef, useState } from "react";
-import { PerspectiveCamera, Vector3 } from "three";
+import { type Object3D, PerspectiveCamera, Scene, Vector3 } from "three";
 import { afterEach, assert, beforeEach, expect, test, vi } from "vitest";
 import { GraphCanvas, type GraphCanvasHandle } from "./GraphCanvas";
 import type { GraphNode } from "./types";
@@ -30,7 +30,9 @@ vi.mock("3d-force-graph", () => ({
     const scene = document.createElement("div");
     scene.style.position = "relative";
     scene.dataset.testid = "graph-scene";
-    scene.append(document.createElement("canvas"));
+    const canvas = document.createElement("canvas");
+    canvas.getBoundingClientRect = () => new DOMRect(0, 0, 800, 600);
+    scene.append(canvas);
     for (const renderer of options.extraRenderers)
       scene.append(renderer.domElement);
     container.append(scene);
@@ -41,7 +43,9 @@ vi.mock("3d-force-graph", () => ({
       removeEventListener: vi.fn(),
       update: vi.fn(),
     };
-    const renderer = {};
+    const renderer = { domElement: canvas };
+    const world = new Scene();
+    let makeNode: (node: object) => Object3D;
     const graph: object = new Proxy(
       {},
       {
@@ -49,6 +53,23 @@ vi.mock("3d-force-graph", () => ({
           if (key === "camera") return () => camera;
           if (key === "controls") return () => controls;
           if (key === "renderer") return () => renderer;
+          if (key === "scene") return () => world;
+          if (key === "nodeThreeObject")
+            return (factory: typeof makeNode) => {
+              makeNode = factory;
+              return graph;
+            };
+          if (key === "graphData")
+            return (data: { nodes: object[] }) => {
+              for (const node of data.nodes) {
+                const visual = makeNode(node);
+                world.add(visual);
+                options.extraRenderers[0]?.domElement.append(
+                  visual.userData.label.element,
+                );
+              }
+              return graph;
+            };
           if (key === "cameraPosition") return rendererState.cameraPosition;
           if (key === "_destructor") return () => scene.remove();
           if (key === "width" || key === "height") {
@@ -248,4 +269,120 @@ test("화면 맞춤은 시작 연출을 취소하고 언마운트는 예약 작�
   expect(rendererState.camera.position.z).toBe(position);
   view.unmount();
   expect(vi.getTimerCount()).toBe(0);
+});
+
+test.each(["node", "label"])(
+  "%s 클릭은 미세한 흔들림과 호버 대기 없이 한 번 선택한다",
+  (target) => {
+    const onNodeClick = vi.fn();
+    render(
+      <GraphCanvas
+        nodes={nodes}
+        edges={[]}
+        selectedNodeId={null}
+        onNodeClick={onNodeClick}
+      />,
+    );
+    act(() => vi.advanceTimersByTime(16));
+    const element =
+      target === "label"
+        ? screen.getByRole("button", { name: "중심 중심으로 이동" })
+        : screen.getByTestId("graph-scene").querySelector("canvas");
+    assert(element);
+    // 첫 노드는 원점에 있다. 카메라 정면을 즉시 누르고 3px 흔들린다.
+    fireEvent.pointerDown(element, {
+      pointerId: 1,
+      isPrimary: true,
+      button: 0,
+      clientX: 400,
+      clientY: 300,
+    });
+    fireEvent.pointerMove(element, {
+      pointerId: 1,
+      isPrimary: true,
+      clientX: 403,
+      clientY: 300,
+    });
+    fireEvent.pointerUp(element, {
+      pointerId: 1,
+      isPrimary: true,
+      button: 0,
+      clientX: 403,
+      clientY: 300,
+    });
+    fireEvent.click(element, { detail: 1, clientX: 403, clientY: 300 });
+    expect(onNodeClick).toHaveBeenCalledExactlyOnceWith(nodes[0]);
+  },
+);
+
+test.each(["drag", "cancel", "secondary", "background"])(
+  "%s 입력은 노드를 선택하지 않는다",
+  (gesture) => {
+    const onNodeClick = vi.fn();
+    render(
+      <GraphCanvas
+        nodes={nodes}
+        edges={[]}
+        selectedNodeId={null}
+        onNodeClick={onNodeClick}
+      />,
+    );
+    act(() => vi.advanceTimersByTime(16));
+    const canvas = screen.getByTestId("graph-scene").querySelector("canvas");
+    assert(canvas);
+    const x = gesture === "background" ? 10 : 400;
+    fireEvent.pointerDown(canvas, {
+      pointerId: 1,
+      isPrimary: true,
+      button: gesture === "secondary" ? 2 : 0,
+      clientX: x,
+      clientY: 300,
+    });
+    if (gesture === "drag") {
+      fireEvent.pointerMove(canvas, {
+        pointerId: 1,
+        clientX: 430,
+        clientY: 300,
+      });
+    }
+    if (gesture === "cancel") fireEvent.pointerCancel(canvas);
+    // 원래 위치로 돌아온 드래그도 클릭이 되면 안 된다.
+    fireEvent.pointerUp(canvas, { pointerId: 1, clientX: x, clientY: 300 });
+    fireEvent.click(canvas, { detail: 1, clientX: x, clientY: 300 });
+    expect(onNodeClick).not.toHaveBeenCalled();
+  },
+);
+
+test("이름표의 키보드 활성화는 최신 노드 데이터와 콜백을 사용한다", () => {
+  const oldClick = vi.fn();
+  const onNodeClick = vi.fn();
+  const view = render(
+    <GraphCanvas
+      nodes={nodes}
+      edges={[]}
+      selectedNodeId={null}
+      onNodeClick={oldClick}
+    />,
+  );
+  act(() => vi.advanceTimersByTime(16));
+  const updated = nodes.map((node) => ({
+    ...node,
+    properties: { claim_count: 4 },
+  }));
+  view.rerender(
+    <GraphCanvas
+      nodes={updated}
+      edges={[]}
+      selectedNodeId={null}
+      onNodeClick={onNodeClick}
+    />,
+  );
+  const label = screen.getByRole("button", { name: "중심 중심으로 이동" });
+  // 네이티브 버튼의 Enter/Space 활성화가 생성하는 detail=0 클릭.
+  fireEvent.click(label, { detail: 0 });
+  expect(onNodeClick).toHaveBeenCalledExactlyOnceWith(updated[0]);
+  expect(oldClick).not.toHaveBeenCalled();
+  view.unmount();
+  fireEvent.click(label, { detail: 0 });
+  expect(onNodeClick).toHaveBeenCalledTimes(1);
 });
