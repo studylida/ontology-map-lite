@@ -8,40 +8,74 @@ from ontology_map.db.schema import Claim, Classification, Document, Edge, Node, 
 from ontology_map.services.entity_resolution import find_node_by_name, resolve_or_create_node
 
 
+RELATION_DISPLAY_NAMES = {
+    "OPERATES": "운영",
+    "SUPPLY_CONTRACT_WITH": "공급 계약",
+    "ORGANIZES": "주관",
+    "PARTNERS_WITH": "협력",
+    "DEVELOPS": "개발",
+    "MANUFACTURES": "제조",
+    "CO_DEVELOPS": "공동 개발",
+    "USES": "활용",
+    "SUPPORTS": "지원",
+    "BENEFITS_FROM": "수혜",
+    "PARTICIPATES_IN": "참여",
+}
+
+CLASSIFICATION_DISPLAY_NAMES = {
+    "COMPANY": "기업",
+    "FACILITY": "생산 시설",
+    "PROGRAM": "지원 사업",
+    "ORGANIZATION": "주관 기관",
+    "AGENCY": "지원 기관",
+    "TECH": "기술",
+    "PROJECT": "프로젝트",
+    "TOPIC": "주제",
+    "PERSON": "인물",
+    "GENERAL": "일반",
+}
+
+
 def get_or_create_classification(session: Session, code: str) -> Classification:
-    """분류 코드가 DB에 없으면 실시간 자동 등록(승격)합니다."""
+    """분류 코드가 DB에 없으면 실시간 자동 등록(승격)하며 국문 표시명을 보장합니다."""
     clean_code = code.strip().upper()
     stmt = select(Classification).where(Classification.code == clean_code)
     cls_obj = session.execute(stmt).scalars().first()
 
+    korean_name = CLASSIFICATION_DISPLAY_NAMES.get(clean_code, clean_code.capitalize())
     if not cls_obj:
         cls_obj = Classification(
             code=clean_code,
-            display_name=clean_code.capitalize(),
+            display_name=korean_name,
             is_active=True,
         )
         session.add(cls_obj)
         session.flush()
+    elif cls_obj.display_name == clean_code and clean_code in CLASSIFICATION_DISPLAY_NAMES:
+        cls_obj.display_name = korean_name
 
     return cls_obj
 
 
 def get_or_create_relation(session: Session, code: str) -> Relation:
-    """관계 코드가 DB에 없으면 실시간 자동 등록(승격)합니다."""
+    """관계 코드가 DB에 없으면 실시간 자동 등록(승격)하며 국문 표시명을 보장합니다."""
     clean_code = code.strip().upper()
     stmt = select(Relation).where(Relation.code == clean_code)
     rel_obj = session.execute(stmt).scalars().first()
 
+    korean_name = RELATION_DISPLAY_NAMES.get(clean_code, clean_code)
     if not rel_obj:
         cls_directed = True
         rel_obj = Relation(
             code=clean_code,
-            display_name=clean_code,
+            display_name=korean_name,
             is_directed=cls_directed,
             is_active=True,
         )
         session.add(rel_obj)
         session.flush()
+    elif rel_obj.display_name == clean_code and clean_code in RELATION_DISPLAY_NAMES:
+        rel_obj.display_name = korean_name
 
     return rel_obj
 
@@ -173,12 +207,22 @@ def process_intake(session: Session, payload: Any) -> dict[str, Any]:
             node.description = n.description
             affected_node_ids.add(node.id)
 
-        # M2.4: 속성 누적 (새 속성 키 추가, 충돌 시 기존 채택 값 보존)
+        # M2.4: 속성 누적 (새 속성 키 추가, reports/metrics 딕셔너리 출처별 병합)
         if n.properties:
             cur_props = dict(node.properties or {})
             props_updated = False
             for k, v in n.properties.items():
-                if v is not None and k not in cur_props:
+                if k == "reports" and isinstance(v, dict):
+                    cur_reports = dict(cur_props.get("reports") or {})
+                    cur_reports.update(v)
+                    cur_props["reports"] = cur_reports
+                    props_updated = True
+                elif k == "metrics" and isinstance(v, dict):
+                    cur_metrics = dict(cur_props.get("metrics") or {})
+                    cur_metrics.update(v)
+                    cur_props["metrics"] = cur_metrics
+                    props_updated = True
+                elif v is not None and k not in cur_props:
                     cur_props[k] = v
                     props_updated = True
             if props_updated:

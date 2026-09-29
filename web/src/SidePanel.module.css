@@ -344,3 +344,341 @@
   letter-spacing: -0.3px;
 }
 
+/* =========================================================
+   연계 분석 리포트 (Reports Block)
+   ========================================================= */
+.sectionHeaderRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.reportCountBadge {
+  font-size: 10px;
+  font-weight: 600;
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.15);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  padding: 1px 7px;
+  border-radius: 10px;
+}
+
+.reportsContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.reportCard {
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.reportCardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding-bottom: 8px;
+}
+
+.reportSourceBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #7dd3fc;
+}
+
+.reportIcon {
+  font-size: 13px;
+}
+
+.reportTitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: #f1f5f9;
+}
+
+.reportOverview {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #cbd5e1;
+  margin: 0;
+}
+
+/* 엑셀 지표 비교 Row */
+.reportMetricsRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.25);
+  padding: 8px 12px;
+  border-radius: 6px;
+}
+
+.reportMetricBox {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.reportMetricLabel {
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+.reportMetricVal {
+  font-size: 14px;
+  font-weight: 700;
+  color: #e2e8f0;
+}
+
+.highlightBox .reportMetricVal {
+  color: #38bdf8;
+}
+
+.reportGrowthBox {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+
+.reportGrowthArrow {
+  font-size: 10px;
+  color: #4ade80;
+}
+
+.reportGrowthVal {
+  font-size: 13px;
+  font-weight: 700;
+  color: #4ade80;
+}
+
+/* 인사이트 및 사유 리스트 */
+.reportInsightList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.reportInsightItem {
+  background: rgba(255, 255, 255, 0.03);
+  border-left: 2px solid #38bdf8;
+  padding: 8px 10px;
+  border-radius: 0 4px 4px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.insightItemFact {
+  font-size: 11px;
+  color: #f8fafc;
+  line-height: 1.4;
+}
+
+.insightItemCause,
+.insightItemRec {
+  font-size: 11px;
+  color: #cbd5e1;
+  line-height: 1.4;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.insightItemEvidence {
+  font-size: 10px;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.tagPill {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 600;
+  background: rgba(245, 162, 75, 0.18);
+  color: #fb923c;
+  padding: 1px 4px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.tagPillGreen {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 600;
+  background: rgba(74, 222, 128, 0.15);
+  color: #4ade80;
+  padding: 1px 5px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.tagPillBlue {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 600;
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  padding: 1px 5px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+/* 정부공고 리포트 스타일 */
+.reportTargetProgram {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.targetProgramName {
+  font-size: 12px;
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+.reportProjectBox {
+  background: rgba(255, 255, 255, 0.03);
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.reportSubTitle {
+  font-size: 10px;
+  color: #94a3b8;
+  display: block;
+  margin-bottom: 2px;
+}
+
+.projectName {
+  font-size: 13px;
+  font-weight: 600;
+  color: #65c98b;
+}
+
+.reportRecommendation {
+  font-size: 12px;
+  font-style: italic;
+  color: #cbd5e1;
+  background: rgba(101, 201, 139, 0.06);
+  border-left: 2px solid #65c98b;
+  padding: 6px 10px;
+  margin: 0;
+  border-radius: 0 4px 4px 0;
+}
+
+.decisionRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.decisionBadge {
+  font-size: 10px;
+  font-weight: 700;
+  background: rgba(245, 162, 75, 0.2);
+  color: #f5a24b;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.decisionReason {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.checklistContainer {
+  margin-top: 4px;
+}
+
+.checklistTitle {
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8;
+  display: block;
+  margin-bottom: 6px;
+}
+
+.checkList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.checkListItem {
+  font-size: 11px;
+  color: #cbd5e1;
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+}
+
+.levelMandatory {
+  font-size: 9px;
+  font-weight: 700;
+  color: #f87171;
+}
+
+.levelConditional {
+  font-size: 9px;
+  font-weight: 700;
+  color: #fbbf24;
+}
+
+.checkItemTitle {
+  color: #f1f5f9;
+}
+
+/* 뉴스 동향 스타일 */
+.newsDetailsGrid {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.newsItem {
+  display: flex;
+  gap: 4px;
+  font-size: 11px;
+}
+
+.newsItemKey {
+  color: #94a3b8;
+}
+
+.newsItemVal {
+  color: #e2e8f0;
+  font-weight: 500;
+}
+
+.newsPlanBox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #cbd5e1;
+  background: rgba(56, 189, 248, 0.05);
+  padding: 6px 10px;
+  border-radius: 4px;
+}
+
+

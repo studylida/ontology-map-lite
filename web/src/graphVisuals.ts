@@ -85,21 +85,31 @@ export type LinkVisual = THREE.Group & {
 
 // 레거시 8대 온톨로지 고유 컬러 팔레트 (한국어 & 영문 코드 공용 매핑)
 export const colors: Record<string, string> = {
-  COMPANY: "#b792f4", // 연보라
-  PERSON: "#f5a24b", // 주황
-  TECH: "#43c6d9", // 청록
-  PROJECT: "#65c98b", // 녹색
-  TOPIC: "#65c98b", // 녹색
-  AGENCY: "#f17c9e", // 핑크
-  METRIC: "#facc15", // 골드 노랑
+  COMPANY: "#b792f4", // 연보라 (기업)
+  PERSON: "#f5a24b", // 주황 (인물)
+  TECH: "#43c6d9", // 청록 (기술)
+  PROJECT: "#65c98b", // 녹색 (프로젝트)
+  PROGRAM: "#65c98b", // 녹색 (지원사업)
+  TOPIC: "#65c98b", // 녹색 (주제)
+  AGENCY: "#f17c9e", // 핑크 (기관)
+  ORGANIZATION: "#f17c9e", // 핑크 (주관기관)
+  FACILITY: "#38bdf8", // 스카이블루 (생산시설/공장)
+  METRIC: "#facc15", // 골드 노랑 (지표)
   GENERAL: "#8fa1b8", // 기본 슬레이트
   회사: "#b792f4",
+  기업: "#b792f4",
   인물: "#f5a24b",
   사람: "#f5a24b",
   기술: "#43c6d9",
   프로젝트: "#65c98b",
+  사업: "#65c98b",
+  "지원 사업": "#65c98b",
   주제: "#65c98b",
   기관: "#f17c9e",
+  "주관 기관": "#f17c9e",
+  "지원 기관": "#f17c9e",
+  시설: "#38bdf8",
+  "생산 시설": "#38bdf8",
   지표: "#facc15",
   사건: "#f17c9e",
 };

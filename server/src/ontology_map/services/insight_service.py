@@ -168,10 +168,66 @@ def generate_node_insight(
         ]
     )
 
+    # 연계 분석 리포트 및 지표 속성 텍스트화
+    props_lines: list[str] = []
+    if node.properties:
+        metrics = node.properties.get("metrics")
+        if metrics and isinstance(metrics, dict):
+            m_items = []
+            for m_k, m_v in metrics.items():
+                if isinstance(m_v, dict):
+                    val = m_v.get("value")
+                    unit = m_v.get("unit", "")
+                    period = m_v.get("period", "")
+                    consolidation = m_v.get("consolidation", "")
+                    kind = m_v.get("valueKind", "")
+                    m_items.append(f"{period}년 {m_k}: {val}{unit} ({consolidation}, {kind})")
+                else:
+                    m_items.append(f"{m_k}: {m_v}")
+            props_lines.append(f"- 재무/운영 지표: {', '.join(m_items)}")
+
+        reports = node.properties.get("reports")
+        if reports and isinstance(reports, dict):
+            # Excel
+            if "excel" in reports:
+                ex = reports["excel"]
+                ex_text = f"출처: {ex.get('source', 'Excel')}, 제목: {ex.get('title')}, 개요: {ex.get('overview')}"
+                if "metrics" in ex:
+                    growth = ex["metrics"].get("growth")
+                    if growth:
+                        ex_text += f", 성장률: {growth}"
+                if "insights" in ex and ex["insights"]:
+                    for ins in ex["insights"]:
+                        ex_text += f" | 사실: {ins.get('fact')} (원인: {ins.get('cause')}, 권고: {ins.get('recommendation')})"
+                props_lines.append(f"- [재무 실적 분석 리포트] {ex_text}")
+            # Gov
+            if "gov" in reports:
+                gv = reports["gov"]
+                gv_text = f"출처: {gv.get('source', 'GovInsight')}, 대상사업: {gv.get('targetProgram')}, 추천프로젝트: {gv.get('recommendedProject')}, 권고의견: {gv.get('recommendedParticipation')}, 의사결정: {gv.get('decision')} ({gv.get('decisionReason')})"
+                if "checklist" in gv and gv["checklist"]:
+                    ch_items = [f"[{c.get('level')}]{c.get('title')}({c.get('detail')})" for c in gv["checklist"]]
+                    gv_text += f" | 체크리스트: {', '.join(ch_items)}"
+                props_lines.append(f"- [정부 지원사업 검토 리포트] {gv_text}")
+            # News
+            if "news" in reports:
+                nw = reports["news"]
+                nw_text = f"출처: {nw.get('source', 'News')}, 요약: {nw.get('summary')}, 계약상대: {nw.get('contractPartner')}, 체결일: {nw.get('eventDate')}, 향후계획: {nw.get('plan')}"
+                props_lines.append(f"- [뉴스 공급망 및 동향 리포트] {nw_text}")
+
+        # 기타 일반 속성
+        for k, v in node.properties.items():
+            if k not in ("metrics", "reports", "claim_ids") and not k.startswith("_"):
+                props_lines.append(f"- {k}: {v}")
+
+    props_text = "\n".join(props_lines)
+
     user_prompt = f"""[분석 대상 노드]
 - 이름: {node.name}
 - 분류: {node.classification.display_name if node.classification else 'GENERAL'}
 - 설명: {node.description or '없음'}
+
+[연계 분석 리포트 및 주요 속성]:
+{props_text or '연계된 분석 리포트 없음'}
 
 [승인된 원천 근거 (Claims)]:
 {claims_text or '연계된 Claim 없음'}

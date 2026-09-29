@@ -305,6 +305,12 @@ def convert_gov_native(
             "claimRefs": ["g-c1", "g-c2", "g-c2b", "g-c3", "g-c3b", "g-c4"],
             "isNew": True,
             "sub": "2026년 사업 · 독립 묶음",
+            "properties": {
+                "총예산": "20억원",
+                "지원금_상한": "최대 1억원",
+                "신청마감": "2026년 10월 30일 18:00",
+                "신청대상": "국내 제조 중소기업",
+            },
         },
         {
             "ref": "node-hangyeol",
@@ -693,12 +699,36 @@ def build_intake_payload_from_approved_review(
             c2 = bundle["claims"][1]
             cid = f"c{len(claims)}"
             claims.append(IntakeClaim(ref_id=cid, quote=c2["quote"], claim_text=c2["statement"]))
+            news_report = {
+                "news": {
+                    "source": "External-News",
+                    "title": "소재 공급망 및 증산 동향",
+                    "summary": "누리소재와의 정밀부품용 소재 공급 계약 체결 및 2027년 생산량 확대 검토",
+                    "category": "공급망",
+                    "plan": "한결정밀은 2027년 생산량 확대를 검토 중이라고 밝혔다.",
+                    "contractPartner": "누리소재",
+                    "eventDate": "2026-09-25",
+                }
+            }
             # 한결정밀 노드가 nodes에 없으면 추가, 있으면 claim_refs 확장
             hk_node = next((n for n in nodes if n.name == "한결정밀"), None)
             if hk_node:
                 hk_node.claim_refs.append(cid)
+                cur_p = dict(hk_node.properties or {})
+                cur_rep = dict(cur_p.get("reports") or {})
+                cur_rep.update(news_report)
+                cur_p["reports"] = cur_rep
+                hk_node.properties = cur_p
             else:
-                nodes.append(IntakeNode(ref_id="n1", name="한결정밀", classification="COMPANY", claim_refs=[cid]))
+                nodes.append(
+                    IntakeNode(
+                        ref_id="n1",
+                        name="한결정밀",
+                        classification="COMPANY",
+                        claim_refs=[cid],
+                        properties={"reports": news_report},
+                    )
+                )
 
         if nodes or claims or edges:
             payloads.append(
@@ -728,12 +758,19 @@ def build_intake_payload_from_approved_review(
                 nodes.append(
                     IntakeNode(ref_id="n0", name="새봄산업지원원", classification="ORGANIZATION", claim_refs=["c0"])
                 )
+                prog_props = {
+                    "총예산": "20억원",
+                    "지원금_상한": "최대 1억원",
+                    "신청마감": "2026년 10월 30일 18:00",
+                    "신청대상": "국내 제조 중소기업",
+                }
                 nodes.append(
                     IntakeNode(
                         ref_id="n1",
                         name="2026 제조데이터 실증지원 사업",
                         classification="PROGRAM",
                         claim_refs=["c0"],
+                        properties=prog_props,
                     )
                 )
                 edges.append(
@@ -753,6 +790,12 @@ def build_intake_payload_from_approved_review(
                         ref_id="n1",
                         name="2026 제조데이터 실증지원 사업",
                         classification="PROGRAM",
+                        properties={
+                            "총예산": "20억원",
+                            "지원금_상한": "최대 1억원",
+                            "신청마감": "2026년 10월 30일 18:00",
+                            "신청대상": "국내 제조 중소기업",
+                        },
                     )
                     nodes.append(prog_node)
 
@@ -776,6 +819,21 @@ def build_intake_payload_from_approved_review(
         if "note" in enabled_item_ids and len(bundle["documents"]) > 1:
             report_doc = bundle["documents"][1]
             c_note = bundle["claims"][6]
+            gov_report = {
+                "gov": {
+                    "source": "GovInsight",
+                    "title": "정부 지원사업 참여 추천 분석",
+                    "recommendedProject": "정밀부품 제조데이터 활용 고도화",
+                    "recommendedParticipation": "한결정밀은 신청 요건을 확인한 뒤 참여를 검토할 수 있습니다.",
+                    "decision": "HOLD",
+                    "decisionReason": "회사 규모와 신청 요건 충족 여부를 아직 확인하지 못했습니다.",
+                    "targetProgram": "2026 제조데이터 실증지원 사업",
+                    "checklist": [
+                        {"title": "신청 대상 확인", "detail": "국내 제조 중소기업 해당 여부 확인", "level": "필수"},
+                        {"title": "협력 참여확인서", "detail": "외부 전문기관 협력 필요 시 제출", "level": "조건부"},
+                    ],
+                }
+            }
             payloads.append(
                 IntakePayload(
                     source_project="govinsight",
@@ -787,7 +845,8 @@ def build_intake_payload_from_approved_review(
                             name="한결정밀",
                             classification="COMPANY",
                             claim_refs=["c0"],
-                            description="GovInsight 추천: 신청 요건 확인 후 참여 검토 권고",
+                            description=None,
+                            properties={"reports": gov_report},
                         )
                     ],
                     edges=[],
@@ -825,6 +884,27 @@ def build_intake_payload_from_approved_review(
                 )
             )
 
+        excel_report = {
+            "excel": {
+                "source": "Excel-Agent",
+                "title": "연간 실적 비교 분석",
+                "overview": "한결정밀의 연간 실적을 비교한 시연 분석입니다.",
+                "metrics": {
+                    "2024": {"value": 100, "unit": "억원", "consolidation": "별도", "kind": "실적"},
+                    "2025": {"value": bundle["claims"][0]["value"], "unit": "억원", "consolidation": "별도", "kind": "실적"},
+                    "growth": "+20%",
+                },
+                "insights": [
+                    {
+                        "title": "연간 매출 비교",
+                        "fact": f"한결정밀의 2025년 별도 매출 실적은 {bundle['claims'][0]['value']}억원이며 2024년 100억원보다 20% 증가했습니다.",
+                        "cause": "수요 증가가 영향을 주었을 가능성이 있습니다.",
+                        "recommendation": "수요 증가가 원인인지 추가 자료로 확인하세요.",
+                        "evidence": ["실적!B3", "실적!C3"],
+                    }
+                ],
+            }
+        }
         props = {}
         if "main" in enabled_item_ids:
             props = {
@@ -837,7 +917,12 @@ def build_intake_payload_from_approved_review(
                         "consolidation": "separate",
                         "valueKind": "actual",
                     }
-                }
+                },
+                "reports": excel_report,
+            }
+        elif "second" in enabled_item_ids:
+            props = {
+                "reports": excel_report,
             }
 
         payloads.append(

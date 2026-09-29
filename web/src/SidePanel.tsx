@@ -120,11 +120,17 @@ export function SidePanel({ selectedNode, onClose }: SidePanelProps) {
       ? (data.properties.metrics as Record<string, any>)
       : null;
 
+  const reports =
+    data?.properties?.reports && typeof data.properties.reports === "object"
+      ? (data.properties.reports as Record<string, any>)
+      : null;
+
   const propEntries = data?.properties
     ? Object.entries(data.properties).filter(
         ([k, v]) =>
           k !== "claim_ids" &&
           k !== "metrics" &&
+          k !== "reports" &&
           !k.startsWith("_") &&
           v !== null &&
           v !== undefined &&
@@ -238,15 +244,271 @@ export function SidePanel({ selectedNode, onClose }: SidePanelProps) {
                     <div key={key} className={styles.propItem}>
                       <span className={styles.propKey}>{key}</span>
                       <span className={styles.propVal}>
-                        {typeof val === "object"
-                          ? JSON.stringify(val)
-                          : String(val)}
+                        {(() => {
+                          if (val === null || val === undefined) return "";
+                          if (typeof val === "boolean") return val ? "예" : "아니오";
+                          if (Array.isArray(val)) {
+                            return val
+                              .map((v) => (typeof v === "object" ? JSON.stringify(v) : String(v)))
+                              .join(", ");
+                          }
+                          if (typeof val === "object") {
+                            if (val.name) return String(val.name);
+                            if (val.title) return String(val.title);
+                            if (val.value !== undefined) return `${val.value}${val.unit ?? ""}`;
+                            return JSON.stringify(val);
+                          }
+                          return String(val);
+                        })()}
                       </span>
                     </div>
                   ))}
                 </div>
               )}
             </section>
+
+            {/* 연계 분석 리포트 (심층 인사이트) */}
+            {reports && Object.keys(reports).length > 0 && (
+              <section className={styles.section}>
+                <div className={styles.sectionHeaderRow}>
+                  <h3>연계 분석 리포트</h3>
+                  <span className={styles.reportCountBadge}>
+                    {Object.keys(reports).length}개 출처 연계
+                  </span>
+                </div>
+                <div className={styles.reportsContainer}>
+                  {/* 엑셀 재무 분석 리포트 */}
+                  {reports.excel && (
+                    <article className={styles.reportCard}>
+                      <div className={styles.reportCardHeader}>
+                        <div className={styles.reportSourceBadge}>
+                          <span className={styles.reportIcon}>📊</span>
+                          <span>{reports.excel.source || "Excel-Agent"}</span>
+                        </div>
+                        <span className={styles.reportTitle}>
+                          {reports.excel.title || "연간 실적 비교 분석"}
+                        </span>
+                      </div>
+                      {reports.excel.overview && (
+                        <p className={styles.reportOverview}>
+                          {reports.excel.overview}
+                        </p>
+                      )}
+                      {reports.excel.metrics && (
+                        <div className={styles.reportMetricsRow}>
+                          {reports.excel.metrics["2024"] && (
+                            <div className={styles.reportMetricBox}>
+                              <span className={styles.reportMetricLabel}>
+                                2024년 실적
+                              </span>
+                              <span className={styles.reportMetricVal}>
+                                {reports.excel.metrics["2024"].value}
+                                {reports.excel.metrics["2024"].unit}
+                              </span>
+                            </div>
+                          )}
+                          {reports.excel.metrics.growth && (
+                            <div className={styles.reportGrowthBox}>
+                              <span className={styles.reportGrowthArrow}>▲</span>
+                              <span className={styles.reportGrowthVal}>
+                                {reports.excel.metrics.growth}
+                              </span>
+                            </div>
+                          )}
+                          {reports.excel.metrics["2025"] && (
+                            <div
+                              className={`${styles.reportMetricBox} ${styles.highlightBox}`}
+                            >
+                              <span className={styles.reportMetricLabel}>
+                                2025년 실적
+                              </span>
+                              <span className={styles.reportMetricVal}>
+                                {reports.excel.metrics["2025"].value}
+                                {reports.excel.metrics["2025"].unit}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {reports.excel.insights &&
+                        reports.excel.insights.length > 0 && (
+                          <div className={styles.reportInsightList}>
+                            {reports.excel.insights.map(
+                              (ins: any, idx: number) => (
+                                <div key={idx} className={styles.reportInsightItem}>
+                                  <div className={styles.insightItemFact}>
+                                    <strong>
+                                      💡 {ins.title || "주요 사실"}:
+                                    </strong>{" "}
+                                    {ins.fact}
+                                  </div>
+                                  {ins.cause && (
+                                    <div className={styles.insightItemCause}>
+                                      <span className={styles.tagPill}>
+                                        원인 분석
+                                      </span>{" "}
+                                      {ins.cause}
+                                    </div>
+                                  )}
+                                  {ins.recommendation && (
+                                    <div className={styles.insightItemRec}>
+                                      <span className={styles.tagPill}>
+                                        권고사항
+                                      </span>{" "}
+                                      {ins.recommendation}
+                                    </div>
+                                  )}
+                                  {ins.evidence && (
+                                    <div className={styles.insightItemEvidence}>
+                                      <span>
+                                        근거:{" "}
+                                        {Array.isArray(ins.evidence)
+                                          ? ins.evidence.join(", ")
+                                          : ins.evidence}
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                              ),
+                            )}
+                          </div>
+                        )}
+                    </article>
+                  )}
+
+                  {/* 정부공고 분석 리포트 */}
+                  {reports.gov && (
+                    <article className={styles.reportCard}>
+                      <div className={styles.reportCardHeader}>
+                        <div className={styles.reportSourceBadge}>
+                          <span className={styles.reportIcon}>🏛️</span>
+                          <span>{reports.gov.source || "GovInsight"}</span>
+                        </div>
+                        <span className={styles.reportTitle}>
+                          {reports.gov.title || "지원사업 참여 검토"}
+                        </span>
+                      </div>
+                      {reports.gov.targetProgram && (
+                        <div className={styles.reportTargetProgram}>
+                          <span className={styles.tagPillGreen}>대상 사업</span>
+                          <span className={styles.targetProgramName}>
+                            {reports.gov.targetProgram}
+                          </span>
+                        </div>
+                      )}
+                      {reports.gov.recommendedProject && (
+                        <div className={styles.reportProjectBox}>
+                          <span className={styles.reportSubTitle}>
+                            추천 제안 프로젝트
+                          </span>
+                          <div className={styles.projectName}>
+                            {reports.gov.recommendedProject}
+                          </div>
+                        </div>
+                      )}
+                      {reports.gov.recommendedParticipation && (
+                        <p className={styles.reportRecommendation}>
+                          “{reports.gov.recommendedParticipation}”
+                        </p>
+                      )}
+                      {reports.gov.decision && (
+                        <div className={styles.decisionRow}>
+                          <span className={styles.decisionBadge}>
+                            {reports.gov.decision}
+                          </span>
+                          <span className={styles.decisionReason}>
+                            {reports.gov.decisionReason}
+                          </span>
+                        </div>
+                      )}
+                      {reports.gov.checklist &&
+                        reports.gov.checklist.length > 0 && (
+                          <div className={styles.checklistContainer}>
+                            <span className={styles.checklistTitle}>
+                              📋 신청 요건 사전 체크리스트
+                            </span>
+                            <ul className={styles.checkList}>
+                              {reports.gov.checklist.map(
+                                (item: any, idx: number) => (
+                                  <li key={idx} className={styles.checkListItem}>
+                                    <span
+                                      className={
+                                        item.level === "필수"
+                                          ? styles.levelMandatory
+                                          : styles.levelConditional
+                                      }
+                                    >
+                                      [{item.level}]
+                                    </span>
+                                    <strong className={styles.checkItemTitle}>
+                                      {item.title}
+                                    </strong>
+                                    : {item.detail}
+                                  </li>
+                                ),
+                              )}
+                            </ul>
+                          </div>
+                        )}
+                    </article>
+                  )}
+
+                  {/* 뉴스 공급망/동향 리포트 */}
+                  {reports.news && (
+                    <article className={styles.reportCard}>
+                      <div className={styles.reportCardHeader}>
+                        <div className={styles.reportSourceBadge}>
+                          <span className={styles.reportIcon}>📰</span>
+                          <span>{reports.news.source || "External-News"}</span>
+                        </div>
+                        <span className={styles.reportTitle}>
+                          {reports.news.title || "공급망 및 동향"}
+                        </span>
+                      </div>
+                      {reports.news.summary && (
+                        <p className={styles.reportOverview}>
+                          {reports.news.summary}
+                        </p>
+                      )}
+                      <div className={styles.newsDetailsGrid}>
+                        {reports.news.category && (
+                          <div className={styles.newsItem}>
+                            <span className={styles.newsItemKey}>분야:</span>
+                            <span className={styles.newsItemVal}>
+                              {reports.news.category}
+                            </span>
+                          </div>
+                        )}
+                        {reports.news.contractPartner && (
+                          <div className={styles.newsItem}>
+                            <span className={styles.newsItemKey}>
+                              계약 상대:
+                            </span>
+                            <span className={styles.newsItemVal}>
+                              {reports.news.contractPartner}
+                            </span>
+                          </div>
+                        )}
+                        {reports.news.eventDate && (
+                          <div className={styles.newsItem}>
+                            <span className={styles.newsItemKey}>체결일:</span>
+                            <span className={styles.newsItemVal}>
+                              {reports.news.eventDate}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                      {reports.news.plan && (
+                        <div className={styles.newsPlanBox}>
+                          <span className={styles.tagPillBlue}>향후 계획</span>
+                          <span>{reports.news.plan}</span>
+                        </div>
+                      )}
+                    </article>
+                  )}
+                </div>
+              </section>
+            )}
 
             {/* 개요 근거 (Claims) 아코디언 (기본 접힘) */}
             <section className={styles.section}>
