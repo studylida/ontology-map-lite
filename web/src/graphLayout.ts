@@ -42,7 +42,7 @@ export function layoutTargets(
   currentPositions = new Map<string, Position>(),
 ): Map<string, Position> {
   const cId = String(centerId);
-  const positions = new Map(retained);
+  const positions = new Map<string, Position>();
   positions.set(cId, { ...anchor });
 
   // 1. 노드 티어 정규화 및 분류
@@ -98,12 +98,6 @@ export function layoutTargets(
 
   directNodes.forEach((node, i) => {
     const nId = String(node.id);
-    if (positions.has(nId)) {
-      const p = positions.get(nId)!;
-      nodeAngles.set(nId, Math.atan2(p.y - anchor.y, p.x - anchor.x));
-      return;
-    }
-
     const angle = startTheta1 + i * deltaTheta1;
     nodeAngles.set(nId, angle);
 
@@ -116,7 +110,7 @@ export function layoutTargets(
 
   // -------------------------------------------------------------
   // STEP 2: 2-hop 외곽 호(Arc) 부채꼴 배치
-  // (1-hop 영역을 침범하지 않도록 R2 = R1 + 200px 확보)
+  // (1-hop 영역을 침범하지 않도록 R2 = R1 + 210px 확보)
   // -------------------------------------------------------------
   const R2 = R1 + 210;
 
@@ -126,7 +120,6 @@ export function layoutTargets(
 
   for (const node of twoHopNodes) {
     const nId = String(node.id);
-    if (positions.has(nId)) continue;
 
     // 이 노드와 연결된 1-hop 노드 찾기
     const connectedParentEdge = relations.find((r) => {
@@ -213,7 +206,7 @@ export function layoutTargets(
     const deltaTheta3 = (2 * Math.PI) / N3;
     outerNodes.forEach((node, i) => {
       const nId = String(node.id);
-      if (positions.has(nId)) return;
+      if (nId === cId) return;
 
       // 상위 연결된 노드의 각도가 있다면 그 주변을 따름
       let baseAngle = startTheta1 + (i + 0.25) * deltaTheta3;

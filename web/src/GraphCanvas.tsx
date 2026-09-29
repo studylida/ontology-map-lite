@@ -171,7 +171,7 @@ const nodeStyles: Record<LegacyTier, NodeStyle> = {
     haloOpacity: 0,
     haloFactor: 3.0,
     shellOpacity: 0,
-    labelOpacity: 0.8,
+    labelOpacity: 0, // 평상시 숨김 (호버 시 표출)
     colorScale: 0.85,
   },
   threeHop: {
@@ -180,7 +180,7 @@ const nodeStyles: Record<LegacyTier, NodeStyle> = {
     haloOpacity: 0,
     haloFactor: 2.5,
     shellOpacity: 0,
-    labelOpacity: 0.6,
+    labelOpacity: 0, // 평상시 숨김 (호버 시 표출)
     colorScale: 0.75,
   },
   ambient: {
@@ -189,7 +189,7 @@ const nodeStyles: Record<LegacyTier, NodeStyle> = {
     haloOpacity: 0,
     haloFactor: 2.0,
     shellOpacity: 0,
-    labelOpacity: 0.45,
+    labelOpacity: 0, // 평상시 숨김 (호버 시 표출)
     colorScale: 0.6,
   },
 };
@@ -294,11 +294,15 @@ function applyNodeVisual(
     radius * (1.15 + effectiveReveal * 0.2),
   );
 
-  const labelOpacity = Math.max(
-    effectiveReveal > 0.05 ? 0.5 + effectiveReveal * 0.48 : style.labelOpacity,
-    isAmbient ? 0.45 : 0.6,
-  );
+  const isPrimary = node.tier === "center" || node.tier === "direct";
+  const isHoveredOrActive = effectiveReveal > 0.05;
+  const labelOpacity = isPrimary
+    ? (isHoveredOrActive ? 1.0 : style.labelOpacity)
+    : (isHoveredOrActive ? 0.95 : 0);
+
   visual.userData.label.element.style.opacity = String(labelOpacity);
+  visual.userData.label.element.style.pointerEvents = labelOpacity > 0.05 ? "auto" : "none";
+  visual.userData.label.element.style.visibility = labelOpacity > 0.001 ? "visible" : "hidden";
   visual.userData.label.element.dataset.tier = node.tier;
   if (effectiveReveal > 0.2) {
     visual.userData.label.element.dataset.proximity = "true";
@@ -684,18 +688,12 @@ export function GraphCanvas({
     null;
 
   // 1. 카메라 핏 & 거리 계산 헬퍼
+  // 1. 카메라 핏 & 거리 계산 헬퍼 (항상 원점 0,0,0 중심 포커싱)
   const fitCamera = useCallback((wide = false) => {
     const graph = graphRef.current;
     if (!graph) return;
     const camera = graph.camera() as THREE.PerspectiveCamera;
     const controls = graph.controls() as OrbitControls;
-    const cId = activeCenterId ? String(activeCenterId) : null;
-    const centerNode = cId ? nodesRef.current.get(cId) : null;
-    const anchor = {
-      x: centerNode?.x ?? 0,
-      y: centerNode?.y ?? 0,
-      z: centerNode?.z ?? 0,
-    };
 
     const tangent = Math.tan((camera.fov * Math.PI) / 360);
     const horizontal = (tangent * graph.width()) / graph.height();
@@ -708,12 +706,12 @@ export function GraphCanvas({
 
     for (const node of visibleNodes) {
       const pos = { x: node.x ?? 0, y: node.y ?? 0, z: node.z ?? 0 };
-      const depth = pos.z - anchor.z;
+      const depth = pos.z;
       frontDepth = Math.max(frontDepth, depth);
       distance = Math.max(
         distance,
-        depth + (Math.abs(pos.x - anchor.x) + 40) / horizontal,
-        depth + (Math.abs(pos.y - anchor.y) + 40) / tangent,
+        depth + (Math.abs(pos.x) + 40) / horizontal,
+        depth + (Math.abs(pos.y) + 40) / tangent,
       );
     }
 
@@ -721,13 +719,13 @@ export function GraphCanvas({
       ? distance * 1.5
       : Math.max(110, frontDepth + 36, distance * 0.95);
 
-    controls.target.set(anchor.x, anchor.y, anchor.z);
+    controls.target.set(0, 0, 0);
     graph.cameraPosition(
-      { x: anchor.x, y: anchor.y, z: anchor.z + targetDistance },
-      anchor,
+      { x: 0, y: 0, z: targetDistance },
+      { x: 0, y: 0, z: 0 },
       800,
     );
-  }, [activeCenterId]);
+  }, []);
 
   useImperativeHandle(ref, () => ({
     zoomIn: () => {
@@ -1092,14 +1090,8 @@ export function GraphCanvas({
       targetCenterRef.current = centerId;
     }
 
-    const centerNode =
-      nodesRef.current.get(centerId) ??
-      nodeVisualsRef.current.get(centerId)?.position;
-    const anchor: Position = {
-      x: centerNode?.x ?? 0,
-      y: centerNode?.y ?? 0,
-      z: centerNode?.z ?? 0,
-    };
+    // 중심 노드는 항상 화면 중앙인 월드 원점 (0, 0, 0)을 타겟으로 배치
+    const anchor: Position = { x: 0, y: 0, z: 0 };
 
     // RuntimeNode & RuntimeLink 맵 구성
     const runtimeNodeList: RuntimeNode[] = rawNodes.map((n) => ({
@@ -1329,6 +1321,7 @@ export function GraphCanvas({
             nodeVisualsRef.current,
             nodesRef.current,
           );
+          fitCamera(false);
         }
       };
       animationRef.current = requestAnimationFrame(frame);

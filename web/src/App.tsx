@@ -42,6 +42,9 @@ export function App() {
       try {
         const res = await fetchSubgraph(nodeId, unbounded);
 
+        // 새 서브그래프 데이터와 중심 노드 ID를 원자적으로 동시 갱신
+        setCenterNodeId(nodeId);
+
         setNodes((prevNodes) => {
           const newMap = new Map(res.nodes.map((n) => [n.id, n]));
           const merged: GraphNode[] = [...res.nodes];
@@ -89,7 +92,7 @@ export function App() {
 
   useEffect(() => {
     loadGraph(centerNodeId);
-  }, [centerNodeId, loadGraph]);
+  }, []); // 초기 마운트 시 1회만 로드
 
   // 4. 비동기 대기열 폴링 (2.5초 주기)
   useEffect(() => {
@@ -110,7 +113,6 @@ export function App() {
   const handleNodeClick = useCallback(
     (node: GraphNode) => {
       setSelectedNode(node);
-      setCenterNodeId(node.id);
       loadGraph(node.id);
     },
     [loadGraph],
@@ -124,7 +126,6 @@ export function App() {
 
   const handleSelectSearchedNode = useCallback(
     (item: NodeSearchItem) => {
-      setCenterNodeId(item.id);
       loadGraph(item.id);
     },
     [loadGraph],
