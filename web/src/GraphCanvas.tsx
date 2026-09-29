@@ -687,6 +687,7 @@ export function GraphCanvas({
   const introAnimRef = useRef<number | null>(null);
 
   const [hoveredRelation, setHoveredRelation] = useState<string | null>(null);
+  const [graphMounted, setGraphMounted] = useState(false);
 
   // 중심 노드 ID 결정
   const activeCenterId =
@@ -815,6 +816,7 @@ export function GraphCanvas({
     }) as unknown as ForceGraph3DInstance<RuntimeNode, RuntimeLink>;
 
     graphRef.current = graph;
+    setGraphMounted(true);
 
     graph
       .backgroundColor("#111416")
@@ -1072,6 +1074,7 @@ export function GraphCanvas({
       }
       graph._destructor();
       graphRef.current = null;
+      setGraphMounted(false);
       readyRef.current = false;
       dataInitializedRef.current = false;
       nodesRef.current.clear();
@@ -1326,6 +1329,11 @@ export function GraphCanvas({
           nodeVisualsRef.current,
           nodesRef.current,
         );
+        // 보조 안전망: requestAnimationFrame 콜백이 누락된 경우를 대비
+        if (!readyRef.current) {
+          readyRef.current = true;
+          onReadyRef.current?.();
+        }
       }, 100);
     } else if (centerChanged) {
       const controls = graph.controls() as OrbitControls;
@@ -1370,7 +1378,7 @@ export function GraphCanvas({
         nodesRef.current,
       );
     }
-  }, [rawNodes, rawEdges, activeCenterId, centerNodeId, fitCamera]);
+  }, [rawNodes, rawEdges, activeCenterId, centerNodeId, fitCamera, graphMounted]);
 
   // ── 2단계 인트로 줌 애니메이션 ──
   // introStarted가 true가 되면 로딩 오버레이가 사라지고 카메라 줌인이 시작된다.
