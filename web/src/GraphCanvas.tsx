@@ -73,6 +73,8 @@ interface RuntimeLink {
   conflict: boolean;
   label?: string;
   originalEdge: GraphEdge;
+  isCenterBackbone?: boolean;
+  isCrossLink?: boolean;
 }
 
 interface NodeStyle {
@@ -199,6 +201,24 @@ const relationOpacity: Record<LegacyTier, number> = {
   threeHop: 0.28,
   ambient: 0.15,
 };
+
+function getBaseLinkOpacity(link: RuntimeLink): number {
+  if (link.isCrossLink) {
+    return 0.22; // 1-hop 노드 간 상호 연결선: 가독성을 위해 은은하게 톤다운
+  }
+  if (link.isCenterBackbone) {
+    return 0.88; // 중심 노드와 1-hop 간 주 간선: 선명하게 강조
+  }
+  return relationOpacity[link.tier] ?? 0.45;
+}
+
+function getLinkColor(link: RuntimeLink): string {
+  if (link.conflict) return "#f26d78";
+  if (link.isCrossLink) return "#475569"; // 1-hop 상호 간선: 차분한 어두운 슬레이트
+  if (link.isCenterBackbone) return "#72a7ff"; // 중심 주 간선: 밝고 선명한 블루
+  if (link.tier === "ambient") return "#334155";
+  return "#5b8cd6"; // 일반 계층 간선
+}
 
 function mapTier(
   tier: NodeTier | string | undefined,
@@ -406,7 +426,8 @@ function getFilamentOffsets(count: number): number[] {
 
 function makeLinkVisual(link: RuntimeLink): LinkVisual {
   const group = new THREE.Group() as LinkVisual;
-  const opacity = relationOpacity[link.tier];
+  const opacity = getBaseLinkOpacity(link);
+  const lineColor = getLinkColor(link);
   const lineCount = Math.max(1, Math.min(5, Math.round(link.evidenceGroupCount)));
 
   const lines = Array.from({ length: lineCount }, () => {
@@ -421,7 +442,7 @@ function makeLinkVisual(link: RuntimeLink): LinkVisual {
           depthWrite: false,
         })
       : new THREE.LineBasicMaterial({
-          color: link.tier === "ambient" ? "#475569" : "#72a7ff",
+          color: lineColor,
           transparent: true,
           opacity,
           depthTest: true,
@@ -442,7 +463,7 @@ function makeLinkVisual(link: RuntimeLink): LinkVisual {
     return line;
   });
 
-  const expanded = link.tier === "direct";
+  const expanded = link.isCenterBackbone || (!link.isCrossLink && link.tier === "direct");
   group.userData = {
     linkId: String(link.id),
     lines,
@@ -458,7 +479,7 @@ function makeLinkVisual(link: RuntimeLink): LinkVisual {
     const arrow = new THREE.Mesh(
       new THREE.ConeGeometry(1.2, 4.5, 8),
       new THREE.MeshBasicMaterial({
-        color: link.tier === "ambient" ? "#475569" : "#72a7ff",
+        color: lineColor,
         transparent: true,
         opacity,
         depthWrite: false,
@@ -970,8 +991,8 @@ export function GraphCanvas({
           toOpacity: hasActive
             ? focused
               ? 0.95
-              : relationOpacity[link.tier] * 0.25
-            : relationOpacity[link.tier],
+              : getBaseLinkOpacity(link) * 0.25
+            : getBaseLinkOpacity(link),
           link,
         };
       });
@@ -1094,21 +1115,32 @@ export function GraphCanvas({
       originalNode: n,
     }));
 
-    const runtimeLinkList: RuntimeLink[] = rawEdges.map((e) => ({
-      id: e.id,
-      source: e.source_node_id,
-      target: e.target_node_id,
-      tier: mapTier(e.tier, false),
-      directionality:
-        (e.properties?.directionality as "DIRECTED" | "SYMMETRIC") ?? "DIRECTED",
-      evidenceGroupCount:
-        typeof e.properties?.claim_count === "number"
-          ? e.properties.claim_count
-          : 1,
-      conflict: Boolean(e.properties?.conflict),
-      label: e.relation_name ?? e.relation_code ?? "연관",
-      originalEdge: e,
-    }));
+    const runtimeLinkList: RuntimeLink[] = rawEdges.map((e) => {
+      const sId = e.source_node_id;
+      const tId = e.target_node_id;
+      const isBackbone = sId === activeCenterId || tId === activeCenterId;
+      const sNode = runtimeNodeList.find((n) => n.id === sId);
+      const tNode = runtimeNodeList.find((n) => n.id === tId);
+      const isCross = !isBackbone && sNode?.tier === "direct" && tNode?.tier === "direct";
+
+      return {
+        id: e.id,
+        source: sId,
+        target: tId,
+        tier: mapTier(e.tier, false),
+        directionality:
+          (e.properties?.directionality as "DIRECTED" | "SYMMETRIC") ?? "DIRECTED",
+        evidenceGroupCount:
+          typeof e.properties?.claim_count === "number"
+            ? e.properties.claim_count
+            : 1,
+        conflict: Boolean(e.properties?.conflict),
+        label: e.relation_name ?? e.relation_code ?? "연관",
+        originalEdge: e,
+        isCenterBackbone: isBackbone,
+        isCrossLink: isCross,
+      };
+    });
 
     const currentPositions = new Map<string, Position>(
       [...nodesRef.current].map(([id, n]) => [
@@ -1236,8 +1268,9 @@ export function GraphCanvas({
           move && centerChanged
             ? 0.35 + 0.65 * (progress > 0.8 ? (progress - 0.8) * 5 : 0)
             : 1;
-        visual.userData.opacity = relationOpacity[link.tier] * transitionDampen;
-        paintLinkOpacity(visual, visual.userData.reveal, link.tier === "direct");
+        visual.userData.opacity = getBaseLinkOpacity(link) * transitionDampen;
+        const expanded = link.isCenterBackbone || (!link.isCrossLink && link.tier === "direct");
+        paintLinkOpacity(visual, visual.userData.reveal, expanded);
       }
     };
 
