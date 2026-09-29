@@ -378,3 +378,78 @@ def dismiss_agent_task(task_id: str):
     if not task_queue_manager.dismiss_task(task_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
     return {"status": "ok"}
+
+
+# --- Demo Baseline Seed & HITL Adapter Endpoints ---
+
+class AdapterConvertRequest(BaseModel):
+    producer: str
+    raw_json: dict[str, Any]
+    supplement_json: Optional[dict[str, Any]] = None
+
+
+class AdapterCommitRequest(BaseModel):
+    bundle: dict[str, Any]
+    enabled_ids: list[str]
+
+
+@router.post("/demo/seed")
+def seed_demo_baseline(session: Session = Depends(open_session)):
+    """시연 기준 베이스라인 데이터(한결정밀, 부산공장, 2024 실적)를 멱등하게 적재합니다."""
+    try:
+        from ontology_map.services.demo_seed import ensure_demo_seed
+        result = ensure_demo_seed(session)
+        session.commit()
+        return result
+    except Exception as e:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.post("/adapters/convert")
+def convert_adapter_input(payload: AdapterConvertRequest):
+    """외부 생산자(News, Gov, Excel)의 네이티브 응답을 HITL 검토 후보 번들로 변환합니다."""
+    try:
+        from ontology_map.services.converters import convert_native_bundle
+        bundle = convert_native_bundle(
+            producer=payload.producer,
+            raw=payload.raw_json,
+            supplement=payload.supplement_json,
+        )
+        return bundle
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/adapters/commit")
+def commit_approved_adapter_input(
+    payload: AdapterCommitRequest,
+    session: Session = Depends(open_session),
+):
+    """HITL 검토 화면에서 사용자가 승인한 항목들을 지식그래프에 반영합니다."""
+    try:
+        from ontology_map.services.converters import build_intake_payload_from_approved_review
+        from ontology_map.services.intake_service import process_intake
+
+        intake_payloads = build_intake_payload_from_approved_review(
+            bundle=payload.bundle,
+            enabled_item_ids=set(payload.enabled_ids),
+        )
+
+        results = []
+        for p in intake_payloads:
+            res = process_intake(session, p)
+            results.append(res)
+
+        session.commit()
+        return {
+            "status": "success",
+            "applied_payload_count": len(results),
+            "results": results,
+        }
+    except Exception as e:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+

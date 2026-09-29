@@ -115,10 +115,16 @@ export function SidePanel({ selectedNode, onClose }: SidePanelProps) {
 
   if (!selectedNode) return null;
 
+  const metrics =
+    data?.properties?.metrics && typeof data.properties.metrics === "object"
+      ? (data.properties.metrics as Record<string, any>)
+      : null;
+
   const propEntries = data?.properties
     ? Object.entries(data.properties).filter(
         ([k, v]) =>
           k !== "claim_ids" &&
+          k !== "metrics" &&
           !k.startsWith("_") &&
           v !== null &&
           v !== undefined &&
@@ -166,6 +172,64 @@ export function SidePanel({ selectedNode, onClose }: SidePanelProps) {
                 <p className={styles.summaryText}>{data.description}</p>
               ) : (
                 <p className={styles.emptyHint}>엔티티 기본 설명이 없습니다.</p>
+              )}
+
+              {/* 실적/운영 지표 (Metrics) 카드 */}
+              {metrics && (
+                <div className={styles.metricsContainer}>
+                  {Object.entries(metrics).map(([mKey, mVal]) => {
+                    if (typeof mVal === "object" && mVal !== null) {
+                      const title =
+                        mKey === "revenue"
+                          ? "매출 실적"
+                          : mKey === "operating_profit"
+                          ? "영업이익"
+                          : mKey;
+                      const valStr =
+                        (mVal as any).value !== undefined
+                          ? `${(mVal as any).value}${(mVal as any).unit ?? ""}`
+                          : JSON.stringify(mVal);
+                      const tags = [
+                        (mVal as any).period ? `${(mVal as any).period}년` : null,
+                        (mVal as any).consolidation === "separate"
+                          ? "별도"
+                          : (mVal as any).consolidation === "consolidated"
+                          ? "연결"
+                          : (mVal as any).consolidation,
+                        (mVal as any).valueKind === "actual"
+                          ? "실적"
+                          : (mVal as any).valueKind === "plan"
+                          ? "계획"
+                          : (mVal as any).valueKind,
+                        (mVal as any).currency,
+                      ].filter(Boolean);
+
+                      return (
+                        <div key={mKey} className={styles.metricCard}>
+                          <div className={styles.metricHeader}>
+                            <span className={styles.metricTitle}>{title}</span>
+                            <div className={styles.metricTags}>
+                              {tags.map((t) => (
+                                <span key={String(t)} className={styles.metricTag}>
+                                  {t}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                          <div className={styles.metricValue}>{valStr}</div>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div key={mKey} className={styles.metricCard}>
+                        <div className={styles.metricHeader}>
+                          <span className={styles.metricTitle}>{mKey}</span>
+                        </div>
+                        <div className={styles.metricValue}>{String(mVal)}</div>
+                      </div>
+                    );
+                  })}
+                </div>
               )}
 
               {propEntries.length > 0 && (

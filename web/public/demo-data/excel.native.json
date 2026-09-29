@@ -1,0 +1,252 @@
+{
+  "schemaVersion": "1.0",
+  "exportedAt": "2026-09-29T10:00:00+09:00",
+  "analysis": {
+    "analysisId": "demo-hangyeol-2025",
+    "createdAt": "2026-09-28T09:00:00+09:00",
+    "sourceAvailable": true,
+    "workbook": {
+      "filename": "한결정밀_연간실적_시연.xlsx",
+      "sheetCount": 1,
+      "totalSheetCount": 1,
+      "excludedSheetCount": 0,
+      "excludedSheets": [],
+      "sheets": [
+        {
+          "name": "실적",
+          "rows": 4,
+          "columns": 3,
+          "formulaCount": 0,
+          "tableCount": 0,
+          "chartCount": 0,
+          "formulas": [],
+          "regionCount": 1,
+          "regions": [
+            {
+              "startCell": "A1",
+              "endCell": "C4",
+              "cellCount": 12,
+              "title": "한결정밀 연간 실적",
+              "rowCount": 4,
+              "columnCount": 3,
+              "mergedRanges": [],
+              "headerPaths": [
+                {
+                  "column": "B",
+                  "labels": [
+                    "2024년"
+                  ]
+                },
+                {
+                  "column": "C",
+                  "labels": [
+                    "2025년"
+                  ]
+                }
+              ],
+              "previewRows": [
+                [
+                  {
+                    "address": "A1",
+                    "value": "회사",
+                    "formula": null,
+                    "cachedValue": "회사",
+                    "numberFormat": null,
+                    "bold": false,
+                    "fillColor": null,
+                    "horizontalAlignment": null,
+                    "merged": false,
+                    "semantic": null
+                  },
+                  {
+                    "address": "B1",
+                    "value": "한결정밀",
+                    "formula": null,
+                    "cachedValue": "한결정밀",
+                    "numberFormat": null,
+                    "bold": false,
+                    "fillColor": null,
+                    "horizontalAlignment": null,
+                    "merged": false,
+                    "semantic": null
+                  },
+                  {
+                    "address": "C1",
+                    "value": "단위: 억원 / 별도 / 실적",
+                    "formula": null,
+                    "cachedValue": "단위: 억원 / 별도 / 실적",
+                    "numberFormat": null,
+                    "bold": false,
+                    "fillColor": null,
+                    "horizontalAlignment": null,
+                    "merged": false,
+                    "semantic": null
+                  }
+                ],
+                [
+                  {
+                    "address": "A2",
+                    "value": "항목",
+                    "formula": null,
+                    "cachedValue": "항목",
+                    "numberFormat": null,
+                    "bold": false,
+                    "fillColor": null,
+                    "horizontalAlignment": null,
+                    "merged": false,
+                    "semantic": null
+                  },
+                  {
+                    "address": "B2",
+                    "value": "2024년",
+                    "formula": null,
+                    "cachedValue": "2024년",
+                    "numberFormat": null,
+                    "bold": false,
+                    "fillColor": null,
+                    "horizontalAlignment": null,
+                    "merged": false,
+                    "semantic": null
+                  },
+                  {
+                    "address": "C2",
+                    "value": "2025년",
+                    "formula": null,
+                    "cachedValue": "2025년",
+                    "numberFormat": null,
+                    "bold": false,
+                    "fillColor": null,
+                    "horizontalAlignment": null,
+                    "merged": false,
+                    "semantic": null
+                  }
+                ],
+                [
+                  {
+                    "address": "A3",
+                    "value": "매출",
+                    "formula": null,
+                    "cachedValue": "매출",
+                    "numberFormat": null,
+                    "bold": false,
+                    "fillColor": null,
+                    "horizontalAlignment": null,
+                    "merged": false,
+                    "semantic": null
+                  },
+                  {
+                    "address": "B3",
+                    "value": 100,
+                    "formula": null,
+                    "cachedValue": 100,
+                    "numberFormat": null,
+                    "bold": false,
+                    "fillColor": null,
+                    "horizontalAlignment": null,
+                    "merged": false,
+                    "semantic": null
+                  },
+                  {
+                    "address": "C3",
+                    "value": 120,
+                    "formula": null,
+                    "cachedValue": 120,
+                    "numberFormat": null,
+                    "bold": false,
+                    "fillColor": null,
+                    "horizontalAlignment": null,
+                    "merged": false,
+                    "semantic": null
+                  }
+                ],
+                [
+                  {
+                    "address": "A4",
+                    "value": "영업이익",
+                    "formula": null,
+                    "cachedValue": "영업이익",
+                    "numberFormat": null,
+                    "bold": false,
+                    "fillColor": null,
+                    "horizontalAlignment": null,
+                    "merged": false,
+                    "semantic": null
+                  },
+                  {
+                    "address": "B4",
+                    "value": 8,
+                    "formula": null,
+                    "cachedValue": 8,
+                    "numberFormat": null,
+                    "bold": false,
+                    "fillColor": null,
+                    "horizontalAlignment": null,
+                    "merged": false,
+                    "semantic": null
+                  },
+                  {
+                    "address": "C4",
+                    "value": 10,
+                    "formula": null,
+                    "cachedValue": 10,
+                    "numberFormat": null,
+                    "bold": false,
+                    "fillColor": null,
+                    "horizontalAlignment": null,
+                    "merged": false,
+                    "semantic": null
+                  }
+                ]
+              ],
+              "truncated": false,
+              "semantic": null,
+              "analysisInclusion": null
+            }
+          ],
+          "columnSchemas": [],
+          "tables": [],
+          "charts": [],
+          "analysisInclusion": null,
+          "sheetClassification": null
+        }
+      ]
+    },
+    "insightReport": {
+      "overview": "한결정밀의 연간 실적을 비교한 시연 분석입니다.",
+      "insights": [
+        {
+          "title": "연간 매출 비교",
+          "topic": "매출",
+          "fact": "한결정밀의 2025년 별도 매출 실적은 120억원이며 2024년 100억원보다 20% 증가했습니다.",
+          "cause": "수요 증가가 영향을 주었을 가능성이 있습니다.",
+          "impact": null,
+          "category": "change",
+          "severity": "info",
+          "evidence": [
+            "실적!B3",
+            "실적!C3"
+          ],
+          "recommendation": "수요 증가가 원인인지 추가 자료로 확인하세요.",
+          "confidence": 0.8,
+          "isIncomplete": false,
+          "validationStatus": "verified",
+          "validationReasons": [
+            "제공된 셀값을 이용한 시연입니다."
+          ]
+        }
+      ],
+      "limitations": [
+        "이 자료는 실제 회사 자료가 아닌 시연용 셀 스냅샷입니다."
+      ],
+      "hasIncompleteData": false,
+      "validation": {
+        "generatedCount": 1,
+        "verifiedCount": 1,
+        "limitedCount": 0,
+        "blockedCount": 0,
+        "notices": [],
+        "overviewValidated": true
+      }
+    }
+  }
+}

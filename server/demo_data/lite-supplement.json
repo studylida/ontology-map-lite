@@ -1,0 +1,38 @@
+{
+  "liteSupplementVersion": "1",
+  "dataMode": "synthetic_demo",
+  "description": "이 파일은 lite가 만든 보충 정보다. 생산자의 native 응답에 포함된 것으로 표시하지 않는다.",
+  "gov": {
+    "nativeFile": "gov.native.json",
+    "sourceSnapshots": [
+      {
+        "sourceRef": "gov-body",
+        "sourceKind": "NOTICE_BODY",
+        "title": "[시연] 2026 제조데이터 실증지원 사업 공고",
+        "uri": null,
+        "text": "[시연 공고] 2026 제조데이터 실증지원 사업\n새봄산업지원원은 2026 제조데이터 실증지원 사업을 주관한다.\n이 사업의 총예산은 20억원이며 선정기업당 지원금은 최대 1억원이다.\n신청 대상은 국내 제조 중소기업이며 외부 전문기관과의 협력이 필요한 경우 참여확인서를 제출해야 한다.\n신청 마감은 2026년 10월 30일 오후 6시(한국 시간)이다.\n이 공고에는 선정기업 명단이나 실제 지급 결과가 포함되어 있지 않다.",
+        "synthetic": true
+      }
+    ],
+    "subjectHint": {
+      "name": "한결정밀",
+      "bindingStatus": "사용자가 실제 시연 DB의 검색 결과로 확정해야 함"
+    }
+  },
+  "news": {
+    "nativeFile": "news.native.json",
+    "sourceSnapshots": [],
+    "subjectHint": {
+      "name": "한결정밀"
+    }
+  },
+  "excel": {
+    "nativeFile": "excel.native.json",
+    "sourceSnapshots": [],
+    "subjectHint": {
+      "name": "한결정밀",
+      "source": "실적!B1",
+      "bindingStatus": "기존 노드 검색 결과로 확정해야 함"
+    }
+  }
+}

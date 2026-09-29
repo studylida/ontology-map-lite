@@ -146,13 +146,13 @@ export const nodeStyles: Record<LegacyTier, NodeStyle> = {
     colorScale: 0.75,
   },
   ambient: {
-    opacity: 0.35,
-    emission: 0.4,
+    opacity: 0.72,
+    emission: 0.75,
     haloOpacity: 0,
-    haloFactor: 2.0,
+    haloFactor: 2.2,
     shellOpacity: 0,
-    labelOpacity: 0, // 평상시 숨김 (호버 시 표출)
-    colorScale: 0.6,
+    labelOpacity: 0.72, // 평상시에도 외곽 섬노드 이름을 선명하게 식별 가능 (호버 시 1.0)
+    colorScale: 0.85,
   },
 };
 
@@ -258,11 +258,8 @@ export function applyNodeVisual(
     radius * (1.15 + effectiveReveal * 0.2),
   );
 
-  const isPrimary = node.tier === "center" || node.tier === "direct";
   const isHoveredOrActive = effectiveReveal > 0.05;
-  const labelOpacity = isPrimary
-    ? (isHoveredOrActive ? 1.0 : style.labelOpacity)
-    : (isHoveredOrActive ? 0.95 : 0);
+  const labelOpacity = isHoveredOrActive ? 1.0 : style.labelOpacity;
 
   visual.userData.label.element.style.opacity = String(labelOpacity);
   visual.userData.label.element.style.pointerEvents = labelOpacity > 0.05 ? "auto" : "none";

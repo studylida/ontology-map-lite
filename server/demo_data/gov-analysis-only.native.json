@@ -1,0 +1,104 @@
+{
+  "detectionId": 501,
+  "documentId": 101,
+  "versionId": 2,
+  "summary": "제조기업의 데이터 활용을 지원하는 시연 공고입니다. 주관기관과 지원규모 및 신청 요건을 검토합니다.",
+  "keyPoints": [
+    "새봄산업지원원이 2026 제조데이터 실증지원 사업을 주관합니다.",
+    "총예산은 20억원이며 선정기업당 지원 상한은 1억원입니다."
+  ],
+  "importance": "NORMAL",
+  "reason": "제조 데이터 활용 분야와 관련이 있어 요건을 확인할 필요가 있습니다.",
+  "eligibility": "REVIEW_REQUIRED",
+  "favorableOrNot": "REVIEW_REQUIRED",
+  "proposal": {
+    "usesDemoProfile": true,
+    "sections": [
+      {
+        "title": "참여 검토",
+        "body": "한결정밀은 신청 요건을 확인한 뒤 참여를 검토할 수 있습니다."
+      }
+    ],
+    "documentType": "BUSINESS_NOTICE",
+    "draftStatus": "NOT_APPLICABLE",
+    "draftReason": "시연용 신청 양식과 준비사항을 제공하는 분석 결과입니다.",
+    "sourceAttachmentNames": [],
+    "templateSections": [],
+    "draftSections": [],
+    "preparation": null,
+    "preparationSchemaVersion": 1
+  },
+  "opportunity": {
+    "dimensions": [
+      {
+        "type": "COMPANY_FIT",
+        "score": 70,
+        "reason": "시연용 평가이며 실제 회사의 검증된 평가 결과가 아닙니다."
+      },
+      {
+        "type": "BUSINESS_VALUE",
+        "score": 50,
+        "reason": "시연용 평가이며 실제 회사의 검증된 평가 결과가 아닙니다."
+      },
+      {
+        "type": "FEASIBILITY",
+        "score": 50,
+        "reason": "시연용 평가이며 실제 회사의 검증된 평가 결과가 아닙니다."
+      },
+      {
+        "type": "URGENCY",
+        "score": 50,
+        "reason": "시연용 평가이며 실제 회사의 검증된 평가 결과가 아닙니다."
+      }
+    ]
+  },
+  "usedTools": [],
+  "modelName": "synthetic-demo-no-model-call",
+  "comparisonSummary": {
+    "purpose": "제조기업의 데이터 활용을 지원하는 시연 사업입니다.",
+    "supportScale": "총예산 20억원 및 선정기업당 지원 상한 1억원입니다.",
+    "applicationDeadline": "2026년 10월 30일 오후 6시(한국 시간)입니다.",
+    "eligibility": "신청 대상은 국내 제조 중소기업입니다.",
+    "requiredPartner": "외부 전문기관과 협력이 필요한 경우 참여확인서가 필요합니다.",
+    "legalRisks": [
+      {
+        "type": "DUPLICATE_SUPPORT",
+        "status": "DATA_INSUFFICIENT",
+        "summary": "시연 데이터에는 해당 제한을 판단할 충분한 조항이 없습니다.",
+        "evidenceExcerpt": null,
+        "failureReason": null
+      },
+      {
+        "type": "COST_DOUBLE_COUNTING",
+        "status": "DATA_INSUFFICIENT",
+        "summary": "시연 데이터에는 해당 제한을 판단할 충분한 조항이 없습니다.",
+        "evidenceExcerpt": null,
+        "failureReason": null
+      },
+      {
+        "type": "RESULT_IP_REUSE",
+        "status": "DATA_INSUFFICIENT",
+        "summary": "시연 데이터에는 해당 제한을 판단할 충분한 조항이 없습니다.",
+        "evidenceExcerpt": null,
+        "failureReason": null
+      },
+      {
+        "type": "CONFIDENTIALITY",
+        "status": "DATA_INSUFFICIENT",
+        "summary": "시연 데이터에는 해당 제한을 판단할 충분한 조항이 없습니다.",
+        "evidenceExcerpt": null,
+        "failureReason": null
+      },
+      {
+        "type": "PROPOSAL_TEXT_REUSE",
+        "status": "DATA_INSUFFICIENT",
+        "summary": "시연 데이터에는 해당 제한을 판단할 충분한 조항이 없습니다.",
+        "evidenceExcerpt": null,
+        "failureReason": null
+      }
+    ]
+  },
+  "similarityProfile": null,
+  "similarityEmbedding": null,
+  "embeddingModelName": null
+}

@@ -1,0 +1,69 @@
+{
+  "seedContractVersion": "proposal-1",
+  "dataMode": "synthetic_demo",
+  "warning": "시연 BEFORE 상태를 설명하는 제안 자료다. 현재 API payload가 아니며 실제 DB ID는 실행 환경에서 확인한다.",
+  "document": {
+    "ref": "base-source",
+    "kind": "synthetic_seed",
+    "title": "한결정밀 · 시연 기준 자료",
+    "text": "한결정밀은 부산공장을 운영한다.\n한결정밀의 2024년 별도 매출 실적은 100억원이다."
+  },
+  "nodes": [
+    {
+      "ref": "base-company",
+      "name": "한결정밀",
+      "classification": "COMPANY",
+      "claimRefs": [
+        "base-c1",
+        "base-c2"
+      ]
+    },
+    {
+      "ref": "base-facility",
+      "name": "부산공장",
+      "classification": "FACILITY",
+      "claimRefs": [
+        "base-c1"
+      ]
+    }
+  ],
+  "claims": [
+    {
+      "ref": "base-c1",
+      "documentRef": "base-source",
+      "statement": "한결정밀은 부산공장을 운영한다.",
+      "quote": "한결정밀은 부산공장을 운영한다."
+    },
+    {
+      "ref": "base-c2",
+      "documentRef": "base-source",
+      "statement": "한결정밀의 2024년 별도 매출 실적은 100억원이다.",
+      "quote": "한결정밀의 2024년 별도 매출 실적은 100억원이다."
+    }
+  ],
+  "edges": [
+    {
+      "sourceRef": "base-company",
+      "targetRef": "base-facility",
+      "relationCode": "OPERATES",
+      "claimRefs": [
+        "base-c1"
+      ]
+    }
+  ],
+  "property": {
+    "nodeRef": "base-company",
+    "path": "metrics.revenue",
+    "value": {
+      "period": "2024",
+      "value": 100,
+      "unit": "억원",
+      "currency": "KRW",
+      "consolidation": "separate",
+      "valueKind": "actual"
+    },
+    "claimRefs": [
+      "base-c2"
+    ]
+  }
+}

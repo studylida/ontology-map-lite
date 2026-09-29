@@ -11,6 +11,8 @@ class IntakeNode(BaseModel):
     description: Optional[str] = None
     properties: Optional[dict[str, Any]] = None
     existing_node_id: Optional[int] = Field(default=None, description="기존 DB 노드 연결 시 node_id")
+    claim_ref: Optional[str] = Field(default=None, description="단일 근거 Claim ref_id")
+    claim_refs: list[str] = Field(default_factory=list, description="근거 Claim ref_id 목록")
 
 
 class IntakeEdge(BaseModel):

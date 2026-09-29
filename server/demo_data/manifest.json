@@ -1,0 +1,19 @@
+{
+  "version": "2.0",
+  "allSynthetic": true,
+  "execution": "모델/API/DB 호출 없음; JSON은 분석 스키마를 참고해 수작업 구성",
+  "beforeSeed": "한결정밀 → 부산공장 운영, 2024년 별도 매출 실적 100억원. 실제 DB ID는 실행 환경에서 해소.",
+  "files": {
+    "news.native.json": "ArticleDetail형 정상 예시; 문장 index 10/20으로 배열 위치 오용 방지",
+    "gov.native.json": "DocumentAnalysisResult camelCase형 예시; 공식 파일 export라고 주장하지 않음",
+    "excel.native.json": "실제 schemaVersion 1.0 export 포장을 따른 예시",
+    "lite-supplement.json": "우리 쪽 공고 원문과 대상 힌트; native 데이터와 분리",
+    "expected-review.proposal.json": "기대 중간 표현과 제외 이유; 현재 API payload 아님",
+    "news-missing-evidence.native.json": "존재하지 않는 문장 참조를 가진 오류 처리 시험",
+    "news-wrong-source.native.json": "분석 대상 기사 불일치 오류 처리 시험",
+    "gov-analysis-only.native.json": "원문 없는 분석만으로 기관→사업 관계를 확정하지 않음",
+    "excel-replay.native.json": "exportedAt만 다른 중복 입력",
+    "excel-missing-period.native.json": "값은 있어도 해당 기간 근거가 없어 보류",
+    "before-seed.proposal.json": "현재 지도와 속성의 시연 기준 자료; 현재 API payload 아님"
+  }
+}

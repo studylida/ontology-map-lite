@@ -86,8 +86,25 @@ def get_node_subgraph(
             nodes_by_id[oid] = onode
             current_hop_ids.add(oid)
 
-    # 2. 수집된 모든 노드 간의 상호 연결 엣지 조회
+    # 2. 고립/주변(Ambient) 노드 보충: BFS 탐색에 닿지 않는 독립 컴포넌트(섬노드)를 AMBIENT 계층으로 포함
     all_node_ids = set(nodes_by_id.keys())
+    effective_limit = hop_limit or 60
+    if len(nodes_by_id) < effective_limit:
+        ambient_limit = min(15, effective_limit - len(nodes_by_id))
+        stmt_ambient = (
+            select(Node)
+            .options(joinedload(Node.classification))
+            .where(~Node.id.in_(all_node_ids))
+            .order_by(Node.id.desc())
+            .limit(ambient_limit)
+        )
+        ambient_nodes = session.execute(stmt_ambient).scalars().all()
+        for amb_node in ambient_nodes:
+            visited_tiers[amb_node.id] = "AMBIENT"
+            nodes_by_id[amb_node.id] = amb_node
+            all_node_ids.add(amb_node.id)
+
+    # 3. 수집된 모든 노드 간의 상호 연결 엣지 조회
     stmt_all_edges = (
         select(Edge)
         .options(joinedload(Edge.relation))

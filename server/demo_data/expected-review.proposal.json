@@ -1,0 +1,297 @@
+{
+  "reviewContractVersion": "proposal-2",
+  "warning": "lite 내부 중간 계약의 설계 예시다. 현재 API에 그대로 전송할 수 있는 payload가 아니다. 모델·DB 실행 결과가 아니다.",
+  "news": {
+    "documents": [
+      {
+        "ref": "news-7001",
+        "kind": "article",
+        "nativePath": "bodyText",
+        "sourceRefs": [
+          "id=7001"
+        ]
+      }
+    ],
+    "claims": [
+      {
+        "ref": "n-c1",
+        "documentRef": "news-7001",
+        "statement": "누리소재는 2026년 9월 25일 한결정밀에 정밀부품용 소재를 공급하는 계약을 체결했다.",
+        "quote": "누리소재는 2026년 9월 25일 한결정밀에 정밀부품용 소재를 공급하는 계약을 체결했다.",
+        "sourcePath": "analysis.keyPoints[0]",
+        "evidenceRefs": [
+          {
+            "sentenceIndex": 10
+          }
+        ],
+        "modality": "FACT",
+        "scope": {
+          "eventDate": "2026-09-25",
+          "product": "정밀부품용 소재"
+        }
+      },
+      {
+        "ref": "n-c2",
+        "documentRef": "news-7001",
+        "statement": "한결정밀은 2027년 생산량 확대를 검토 중이라고 밝혔다.",
+        "quote": "한결정밀은 2027년 생산량 확대를 검토 중이라고 밝혔다.",
+        "sourcePath": "analysis.keyPoints[1]",
+        "evidenceRefs": [
+          {
+            "sentenceIndex": 20
+          }
+        ],
+        "modality": "PLAN",
+        "attributedTo": "한결정밀",
+        "mapDestination": "node_panel_only"
+      }
+    ],
+    "edges": [
+      {
+        "source": "누리소재",
+        "relationCode": "SUPPLY_CONTRACT_WITH",
+        "target": "한결정밀",
+        "claimRefs": [
+          "n-c1"
+        ],
+        "scope": {
+          "eventDate": "2026-09-25",
+          "product": "정밀부품용 소재"
+        }
+      }
+    ],
+    "rejected": [
+      {
+        "proposal": "누리소재가 한결정밀에 현재 납품 중이다.",
+        "reason": "계약 체결 문장은 실제 납품을 입증하지 않는다.",
+        "claimRef": "n-c1"
+      }
+    ]
+  },
+  "gov": {
+    "documents": [
+      {
+        "ref": "gov-body",
+        "kind": "provided_notice_snapshot",
+        "supplementPath": "gov.sourceSnapshots[0]"
+      },
+      {
+        "ref": "gov-report",
+        "kind": "producer_analysis",
+        "nativePath": "proposal.preparation.strategy"
+      }
+    ],
+    "claims": [
+      {
+        "ref": "g-c1",
+        "documentRef": "gov-body",
+        "statement": "새봄산업지원원이 2026 제조데이터 실증지원 사업을 주관한다.",
+        "quote": "새봄산업지원원은 2026 제조데이터 실증지원 사업을 주관한다.",
+        "modality": "FACT"
+      },
+      {
+        "ref": "g-c2",
+        "documentRef": "gov-body",
+        "statement": "2026 제조데이터 실증지원 사업의 총예산은 20억원이다.",
+        "quote": "이 사업의 총예산은 20억원이며 선정기업당 지원금은 최대 1억원이다.",
+        "modality": "FACT",
+        "mapDestination": "program_properties"
+      },
+      {
+        "ref": "g-c2b",
+        "documentRef": "gov-body",
+        "statement": "2026 제조데이터 실증지원 사업의 선정기업당 지원금은 최대 1억원이다.",
+        "quote": "이 사업의 총예산은 20억원이며 선정기업당 지원금은 최대 1억원이다.",
+        "modality": "FACT",
+        "mapDestination": "program_properties"
+      },
+      {
+        "ref": "g-c3",
+        "documentRef": "gov-body",
+        "statement": "2026 제조데이터 실증지원 사업의 신청 대상은 국내 제조 중소기업이다.",
+        "quote": "신청 대상은 국내 제조 중소기업이며 외부 전문기관과의 협력이 필요한 경우 참여확인서를 제출해야 한다.",
+        "modality": "FACT",
+        "mapDestination": "program_panel_only"
+      },
+      {
+        "ref": "g-c3b",
+        "documentRef": "gov-body",
+        "statement": "2026 제조데이터 실증지원 사업 신청 시 외부 전문기관과의 협력이 필요한 경우 참여확인서를 제출해야 한다.",
+        "quote": "신청 대상은 국내 제조 중소기업이며 외부 전문기관과의 협력이 필요한 경우 참여확인서를 제출해야 한다.",
+        "modality": "CONDITIONAL_REQUIREMENT",
+        "scope": {
+          "stage": "APPLICATION",
+          "appliesTo": "외부 전문기관과의 협력이 필요한 신청기관"
+        },
+        "mapDestination": "program_panel_only"
+      },
+      {
+        "ref": "g-c4",
+        "documentRef": "gov-body",
+        "statement": "신청 마감은 2026년 10월 30일 오후 6시(한국 시간)이다.",
+        "quote": "신청 마감은 2026년 10월 30일 오후 6시(한국 시간)이다.",
+        "modality": "FACT",
+        "mapDestination": "program_properties"
+      },
+      {
+        "ref": "g-note1",
+        "documentRef": "gov-report",
+        "statement": "GovInsight는 한결정밀에 신청 요건 확인 후 참여 검토를 권고했다.",
+        "quote": "한결정밀은 신청 요건을 확인한 뒤 참여를 검토할 수 있습니다.",
+        "modality": "RECOMMENDATION",
+        "attributedTo": "GovInsight",
+        "mapDestination": "external_analysis_only"
+      }
+    ],
+    "edges": [
+      {
+        "source": "새봄산업지원원",
+        "relationCode": "ORGANIZES",
+        "target": "2026 제조데이터 실증지원 사업",
+        "claimRefs": [
+          "g-c1"
+        ]
+      }
+    ],
+    "rejected": [
+      {
+        "proposal": "한결정밀은 지원금 1억원을 받았다.",
+        "reason": "상한과 수령액은 다르며 선정·지급 근거가 없다."
+      },
+      {
+        "proposal": "정밀부품 제조데이터 활용 고도화는 공고의 공식 사업명이다.",
+        "reason": "recommendedProject는 신청 전략에서 제안한 프로젝트명이다."
+      }
+    ]
+  },
+  "excel": {
+    "documents": [
+      {
+        "ref": "excel-snapshot",
+        "kind": "workbook_export_snapshot",
+        "nativePath": "analysis.workbook"
+      }
+    ],
+    "claims": [
+      {
+        "ref": "e-c1",
+        "documentRef": "excel-snapshot",
+        "statement": "한결정밀의 2025년 별도 매출 실적은 120억원이다.",
+        "evidenceRefs": [
+          {
+            "sheetName": "실적",
+            "reference": "C3"
+          },
+          {
+            "sheetName": "실적",
+            "reference": "B1"
+          },
+          {
+            "sheetName": "실적",
+            "reference": "C1"
+          },
+          {
+            "sheetName": "실적",
+            "reference": "C2"
+          },
+          {
+            "sheetName": "실적",
+            "reference": "A3"
+          }
+        ],
+        "modality": "FACT",
+        "scope": {
+          "metric": "revenue",
+          "period": "2025",
+          "unit": "억원",
+          "currency": "KRW",
+          "consolidation": "separate",
+          "valueKind": "actual"
+        },
+        "value": 120
+      },
+      {
+        "ref": "e-c2",
+        "documentRef": "excel-snapshot",
+        "statement": "한결정밀의 2025년 별도 매출 실적은 2024년 대비 20% 증가했다.",
+        "evidenceRefs": [
+          {
+            "sheetName": "실적",
+            "reference": "B3"
+          },
+          {
+            "sheetName": "실적",
+            "reference": "C3"
+          },
+          {
+            "sheetName": "실적",
+            "reference": "B1"
+          },
+          {
+            "sheetName": "실적",
+            "reference": "C1"
+          },
+          {
+            "sheetName": "실적",
+            "reference": "B2"
+          },
+          {
+            "sheetName": "실적",
+            "reference": "C2"
+          },
+          {
+            "sheetName": "실적",
+            "reference": "A3"
+          }
+        ],
+        "modality": "DERIVED_FACT",
+        "calculation": {
+          "expression": "(120 - 100) / 100 * 100",
+          "result": 20,
+          "unit": "%"
+        },
+        "scope": {
+          "subject": "한결정밀",
+          "metric": "revenue",
+          "basePeriod": "2024",
+          "period": "2025",
+          "currency": "KRW",
+          "consolidation": "separate",
+          "valueKind": "actual"
+        }
+      }
+    ],
+    "edges": [],
+    "propertyChanges": [
+      {
+        "node": "한결정밀",
+        "path": "metrics.revenue",
+        "before": {
+          "period": "2024",
+          "value": 100,
+          "unit": "억원",
+          "currency": "KRW",
+          "consolidation": "separate",
+          "valueKind": "actual"
+        },
+        "after": {
+          "period": "2025",
+          "value": 120,
+          "unit": "억원",
+          "currency": "KRW",
+          "consolidation": "separate",
+          "valueKind": "actual"
+        },
+        "claimRefs": [
+          "e-c1"
+        ]
+      }
+    ],
+    "rejected": [
+      {
+        "proposal": "수요 증가가 매출 상승을 유발했다.",
+        "reason": "셀값과 증감 계산만으로 원인을 입증하지 못한다."
+      }
+    ]
+  }
+}

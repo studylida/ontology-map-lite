@@ -1,0 +1,91 @@
+{
+  "id": 7001,
+  "title": "[시연] 한결정밀 소재 공급 계약",
+  "publisher": "시연산업뉴스",
+  "canonicalUrl": "https://news.example.invalid/articles/7001",
+  "language": "ko",
+  "publishedAt": "2026-09-26T09:00:00+09:00",
+  "fetchedAt": "2026-09-29T10:00:00+09:00",
+  "fetchStatus": "OK",
+  "topicId": 91,
+  "topicName": "제조 산업 동향",
+  "sourceId": 8,
+  "sourceName": "시연 뉴스 소스",
+  "bodyText": "누리소재는 2026년 9월 25일 한결정밀에 정밀부품용 소재를 공급하는 계약을 체결했다.\n한결정밀은 2027년 생산량 확대를 검토 중이라고 밝혔다.",
+  "sentences": [
+    {
+      "index": 10,
+      "text": "누리소재는 2026년 9월 25일 한결정밀에 정밀부품용 소재를 공급하는 계약을 체결했다."
+    },
+    {
+      "index": 20,
+      "text": "한결정밀은 2027년 생산량 확대를 검토 중이라고 밝혔다."
+    }
+  ],
+  "analysis": {
+    "changeType": "NEW",
+    "summary": "소재 공급 계약 체결과 향후 증산 검토에 관한 기사입니다.",
+    "keyPoints": [
+      {
+        "text": "누리소재는 2026년 9월 25일 한결정밀에 정밀부품용 소재를 공급하는 계약을 체결했다.",
+        "evidence": [
+          10
+        ],
+        "groundedness": "grounded",
+        "groundingReason": "제공된 10번 문장에 계약 체결이 명시되어 있습니다.",
+        "claimType": "FACT",
+        "attributedTo": null
+      },
+      {
+        "text": "한결정밀은 2027년 생산량 확대를 검토 중이라고 밝혔다.",
+        "evidence": [
+          20
+        ],
+        "groundedness": "grounded",
+        "groundingReason": "20번 문장은 계획 검토에 대한 회사 발언입니다.",
+        "claimType": "FACT",
+        "attributedTo": "한결정밀"
+      }
+    ],
+    "intent": null,
+    "sentiment": "neutral",
+    "sensitivity": {
+      "score": 4,
+      "level": "low",
+      "axes": {
+        "customerMove": {
+          "score": 1,
+          "evidenceSentenceIds": [
+            10
+          ]
+        },
+        "dealSignal": {
+          "score": 1,
+          "evidenceSentenceIds": [
+            10
+          ]
+        },
+        "competitorThreat": {
+          "score": 1,
+          "evidenceSentenceIds": [
+            10
+          ]
+        },
+        "industryShift": {
+          "score": 1,
+          "evidenceSentenceIds": [
+            10
+          ]
+        }
+      }
+    },
+    "relevance": "watch",
+    "category": "공급망",
+    "perspectiveTags": [],
+    "analyzedAt": "2026-09-29T10:01:00+09:00",
+    "runId": 88
+  },
+  "analysisArticleId": 7999,
+  "issueId": 31,
+  "relatedArticles": []
+}

@@ -202,9 +202,10 @@ def process_intake(session: Session, payload: Any) -> dict[str, Any]:
             if n_name_lower in quote_lower or n_name_lower in stmt_lower:
                 matched_node_claim_ids.add(claim_obj.id)
 
-        # 문서에 단일 노드만 있는 극단적 케이스에 한해 doc_claim_ids 폴백
+        # 문서에 단일 노드만 존재하는 경우 해당 문서의 claims는 해당 노드의 근거로 귀속
         if not matched_node_claim_ids and len(payload.nodes) == 1 and doc_claim_ids:
             matched_node_claim_ids = set(doc_claim_ids)
+
 
         if matched_node_claim_ids:
             cur_claim_ids = set(node.claim_ids or [])
@@ -263,8 +264,6 @@ def process_intake(session: Session, payload: Any) -> dict[str, Any]:
             if cr in ref_to_claim:
                 edge_claim_ids.append(ref_to_claim[cr].id)
 
-        if not edge_claim_ids and doc_claim_ids:
-            edge_claim_ids = [doc_claim_ids[0]]
 
         # 동일 (source, target, relation) 엣지 존재 여부 확인
         stmt_edge = select(Edge).where(
