@@ -229,12 +229,147 @@ export function KnowledgeIngestionModal({
     }
   }, [mode, reviewTaskId]);
 
+  // 엣지 유효성 검사 헬퍼: 양 끝 노드가 모두 선택 목록에 존재하는지 검사
+  const isEdgeValid = (
+    edge: IntakeEdge,
+    nodeIndices: Set<number>,
+    nodes: IntakeNode[],
+  ): boolean => {
+    const isSourceSelected = nodes.some(
+      (n, nIdx) =>
+        nodeIndices.has(nIdx) &&
+        ((edge.source_ref && edge.source_ref === n.ref_id) ||
+          edge.source_name.trim().toLowerCase() === n.name.trim().toLowerCase()),
+    );
+    const isTargetSelected = nodes.some(
+      (n, nIdx) =>
+        nodeIndices.has(nIdx) &&
+        ((edge.target_ref && edge.target_ref === n.ref_id) ||
+          edge.target_name.trim().toLowerCase() === n.name.trim().toLowerCase()),
+    );
+    return isSourceSelected && isTargetSelected;
+  };
+
+  // 미해결 끝점이 있는 이유를 구체적인 엔티티명과 함께 반환 (사용자 고지용)
+  const getMissingEndpointReason = (
+    edge: IntakeEdge,
+    nodeIndices: Set<number>,
+    nodes: IntakeNode[],
+  ): string | null => {
+    const hasSource = nodes.some(
+      (n, idx) =>
+        nodeIndices.has(idx) &&
+        ((edge.source_ref && edge.source_ref === n.ref_id) ||
+          edge.source_name.trim().toLowerCase() === n.name.trim().toLowerCase()),
+    );
+    const hasTarget = nodes.some(
+      (n, idx) =>
+        nodeIndices.has(idx) &&
+        ((edge.target_ref && edge.target_ref === n.ref_id) ||
+          edge.target_name.trim().toLowerCase() === n.name.trim().toLowerCase()),
+    );
+    if (!hasSource && !hasTarget) {
+      return `출발 노드 '${edge.source_name}', 도착 노드 '${edge.target_name}' 미선택`;
+    }
+    if (!hasSource) {
+      return `출발 노드 '${edge.source_name}' 미선택`;
+    }
+    if (!hasTarget) {
+      return `도착 노드 '${edge.target_name}' 미선택`;
+    }
+    return null;
+  };
+
   // 온톨로지 DTO를 HITL 검토 화면으로 세팅
   const loadPayloadForReview = (payload: IntakePayload) => {
-    setReviewedPayload(JSON.parse(JSON.stringify(payload)));
-    setSelectedNodeIndices(new Set(payload.nodes.map((_, i) => i)));
-    setSelectedEdgeIndices(new Set(payload.edges.map((_, i) => i)));
+    const cloned: IntakePayload = JSON.parse(JSON.stringify(payload));
+    const nameToRef: Record<string, string> = {};
+
+    cloned.nodes = cloned.nodes.map((n, i) => {
+      const ref_id = n.ref_id || `n${i}`;
+      nameToRef[n.name.trim().toLowerCase()] = ref_id;
+      return { ...n, ref_id };
+    });
+
+    cloned.claims = cloned.claims.map((c, i) => ({
+      ...c,
+      ref_id: c.ref_id || `c${i}`,
+    }));
+
+    cloned.edges = cloned.edges.map((e) => {
+      const sRef = e.source_ref || nameToRef[e.source_name.trim().toLowerCase()];
+      const tRef = e.target_ref || nameToRef[e.target_name.trim().toLowerCase()];
+      return { ...e, source_ref: sRef, target_ref: tRef };
+    });
+
+    const initialNodeIndices = new Set(cloned.nodes.map((_, i) => i));
+    const initialValidEdgeIndices = new Set<number>();
+    cloned.edges.forEach((edge, i) => {
+      if (isEdgeValid(edge, initialNodeIndices, cloned.nodes)) {
+        initialValidEdgeIndices.add(i);
+      }
+    });
+
+    setReviewedPayload(cloned);
+    setSelectedNodeIndices(initialNodeIndices);
+    setSelectedEdgeIndices(initialValidEdgeIndices);
     setCurrentMode("review");
+  };
+
+  const toggleNode = (idx: number, checked: boolean) => {
+    if (!reviewedPayload) return;
+    const nextNodes = new Set(selectedNodeIndices);
+    if (checked) {
+      nextNodes.add(idx);
+    } else {
+      nextNodes.delete(idx);
+    }
+
+    // 새 노드 선택 상태를 기준으로 엣지 유효성을 재계산하여, 유효하지 않은 엣지는 자동 해제
+    const nextEdges = new Set<number>();
+    selectedEdgeIndices.forEach((edgeIdx) => {
+      const edge = reviewedPayload.edges[edgeIdx];
+      if (edge && isEdgeValid(edge, nextNodes, reviewedPayload.nodes)) {
+        nextEdges.add(edgeIdx);
+      }
+    });
+
+    setSelectedNodeIndices(nextNodes);
+    setSelectedEdgeIndices(nextEdges);
+  };
+
+  const updateNodeName = (idx: number, newName: string) => {
+    if (!reviewedPayload) return;
+    const oldName = reviewedPayload.nodes[idx].name;
+    const refId = reviewedPayload.nodes[idx].ref_id;
+    const updatedNodes = [...reviewedPayload.nodes];
+    updatedNodes[idx] = { ...updatedNodes[idx], name: newName };
+
+    // ref_id를 기반으로 엣지의 표시 이름도 동기화 (참조 무결성 유지)
+    const updatedEdges = reviewedPayload.edges.map((edge) => {
+      const isSrc = (refId && edge.source_ref === refId) || edge.source_name === oldName;
+      const isTgt = (refId && edge.target_ref === refId) || edge.target_name === oldName;
+      return {
+        ...edge,
+        source_name: isSrc ? newName : edge.source_name,
+        target_name: isTgt ? newName : edge.target_name,
+      };
+    });
+
+    setReviewedPayload({
+      ...reviewedPayload,
+      nodes: updatedNodes,
+      edges: updatedEdges,
+    });
+  };
+
+  // 검토 화면에서 취소 시 모달을 닫지 않고 4종 탭 입력 화면으로 복귀
+  const handleCancel = () => {
+    if (currentMode === "review") {
+      setCurrentMode("input");
+    } else {
+      onClose();
+    }
   };
 
   // [입력 모드]: 비동기 작업 제출
@@ -296,20 +431,30 @@ export function KnowledgeIngestionModal({
     setSubmitting(true);
 
     try {
-      // 체크된 노드와 엣지만 필터링
+      // 체크된 노드와 유효성이 확인된 엣지만 필터링 (양 끝 노드가 모두 승인된 엣지만 엄격히 보장)
+      const approvedNodes = reviewedPayload.nodes.filter((_, idx) =>
+        selectedNodeIndices.has(idx),
+      );
+      const approvedEdges = reviewedPayload.edges.filter(
+        (e, idx) =>
+          selectedEdgeIndices.has(idx) &&
+          isEdgeValid(e, selectedNodeIndices, reviewedPayload.nodes),
+      );
+
       const finalPayload: IntakePayload = {
         ...reviewedPayload,
-        nodes: reviewedPayload.nodes.filter((_, idx) =>
-          selectedNodeIndices.has(idx),
-        ),
-        edges: reviewedPayload.edges.filter((_, idx) =>
-          selectedEdgeIndices.has(idx),
-        ),
+        nodes: approvedNodes,
+        edges: approvedEdges,
+        claims: reviewedPayload.claims,
       };
 
       const res = await intakeKnowledge(finalPayload);
       if (reviewTaskId) {
-        await dismissAgentTask(reviewTaskId); // 완료된 작업 대기열에서 제거
+        try {
+          await dismissAgentTask(reviewTaskId);
+        } catch {
+          // 알림 삭제 실패 시 적재 성공 상태는 유지
+        }
       }
 
       onClose();
@@ -571,31 +716,13 @@ export function KnowledgeIngestionModal({
                     <input
                       type="checkbox"
                       checked={selectedNodeIndices.has(idx)}
-                      onChange={(e) => {
-                        const next = new Set(selectedNodeIndices);
-                        e.target.checked ? next.add(idx) : next.delete(idx);
-                        setSelectedNodeIndices(next);
-                      }}
+                      onChange={(e) => toggleNode(idx, e.target.checked)}
                     />
                     <div className={styles.checkItemContent}>
                       <input
                         type="text"
                         value={node.name}
-                        onChange={(e) => {
-                          if (!reviewedPayload) return;
-                          const updatedNodes = [...reviewedPayload.nodes];
-                          const targetNode = updatedNodes[idx];
-                          if (targetNode) {
-                            updatedNodes[idx] = {
-                              ...targetNode,
-                              name: e.target.value,
-                            };
-                            setReviewedPayload({
-                              ...reviewedPayload,
-                              nodes: updatedNodes,
-                            });
-                          }
-                        }}
+                        onChange={(e) => updateNodeName(idx, e.target.value)}
                         className={styles.inlineEdit}
                       />
                       <span style={{ fontSize: "11px", color: "#94a3b8" }}>
@@ -613,36 +740,73 @@ export function KnowledgeIngestionModal({
                 </span>
               </div>
               <div className={styles.checkList}>
-                {reviewedPayload.edges.map((edge, idx) => (
-                  <div
-                    key={idx}
-                    className={`${styles.checkItem} ${selectedEdgeIndices.has(idx) ? styles.checkItemActive : ""}`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedEdgeIndices.has(idx)}
-                      onChange={(e) => {
-                        const next = new Set(selectedEdgeIndices);
-                        e.target.checked ? next.add(idx) : next.delete(idx);
-                        setSelectedEdgeIndices(next);
-                      }}
-                    />
-                    <div className={styles.checkItemContent}>
-                      <span style={{ fontSize: "12px", color: "#38bdf8" }}>
-                        {edge.source_name} ➔ <strong>{edge.relation}</strong> ➔{" "}
-                        {edge.target_name}
-                      </span>
+                {reviewedPayload.edges.map((edge, idx) => {
+                  const missingReason = getMissingEndpointReason(
+                    edge,
+                    selectedNodeIndices,
+                    reviewedPayload.nodes,
+                  );
+                  const isEdgeValidCondition = missingReason === null;
+
+                  return (
+                    <div
+                      key={idx}
+                      className={`${styles.checkItem} ${selectedEdgeIndices.has(idx) ? styles.checkItemActive : ""}`}
+                      style={{ opacity: isEdgeValidCondition ? 1 : 0.45 }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedEdgeIndices.has(idx) && isEdgeValidCondition}
+                        disabled={!isEdgeValidCondition}
+                        onChange={(e) => {
+                          const next = new Set(selectedEdgeIndices);
+                          e.target.checked ? next.add(idx) : next.delete(idx);
+                          setSelectedEdgeIndices(next);
+                        }}
+                      />
+                      <div className={styles.checkItemContent}>
+                        <span style={{ fontSize: "12px", color: "#38bdf8" }}>
+                          {edge.source_name} ➔ <strong>{edge.relation}</strong> ➔{" "}
+                          {edge.target_name}
+                        </span>
+                        {!isEdgeValidCondition && (
+                          <span style={{ fontSize: "11px", color: "#f87171", marginLeft: "8px" }}>
+                            ({missingReason})
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
+
+              {/* 추출된 원천 근거(Claims) 미리보기 아코디언 */}
+              {reviewedPayload.claims && reviewedPayload.claims.length > 0 && (
+                <div style={{ marginTop: "14px" }}>
+                  <details style={{ background: "rgba(15, 23, 42, 0.4)", borderRadius: "8px", padding: "10px" }}>
+                    <summary style={{ cursor: "pointer", fontSize: "12px", color: "#38bdf8", fontWeight: 600 }}>
+                      📄 원천 인용 근거 미리보기 ({reviewedPayload.claims.length}건)
+                    </summary>
+                    <div style={{ marginTop: "8px", display: "flex", flexDirection: "column", gap: "6px", maxHeight: "140px", overflowY: "auto" }}>
+                      {reviewedPayload.claims.map((claim, cIdx) => (
+                        <div key={cIdx} style={{ fontSize: "11px", color: "#cbd5e1", borderLeft: "2px solid #38bdf8", paddingLeft: "8px" }}>
+                          “{claim.quote}”
+                          {claim.claim_text && claim.claim_text !== claim.quote && (
+                            <span style={{ color: "#94a3b8", display: "block" }}>➔ {claim.claim_text}</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                </div>
+              )}
             </>
           ) : null}
         </div>
 
         <footer className={styles.footer}>
-          <button type="button" className={styles.cancelBtn} onClick={onClose}>
-            취소
+          <button type="button" className={styles.cancelBtn} onClick={handleCancel}>
+            {currentMode === "review" ? "이전" : "취소"}
           </button>
           {currentMode === "input" && activeTab !== "peer" && (
             <button

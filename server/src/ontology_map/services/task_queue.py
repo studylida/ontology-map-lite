@@ -14,6 +14,7 @@ from ontology_map.schemas import IntakePayload
 from ontology_map.services.document_parser import extract_document_text
 from ontology_map.services.entity_resolution import get_existing_entity_names
 from ontology_map.services.ingestion_agent import extract_ontology_from_text
+from ontology_map.services.insight_service import generate_node_insight
 
 TaskStatus = Literal["pending", "processing", "completed", "failed"]
 
@@ -52,8 +53,22 @@ class TaskQueueManager:
         self.queue: asyncio.Queue[Tuple[str, str, bytes | str, Optional[str]]] = asyncio.Queue()
         self._worker_task: Optional[asyncio.Task] = None
 
+        # 노드 인사이트 백그라운드 큐
+        self.insight_queue: asyncio.Queue[int] = asyncio.Queue()
+        self._pending_insight_node_ids: set[int] = set()
+        self._insight_worker_task: Optional[asyncio.Task] = None
+        self._main_loop: Optional[asyncio.AbstractEventLoop] = None
+
     def _ensure_worker(self) -> None:
         """백그라운드 워커가 돌고 있지 않다면 시작합니다."""
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return
+        if getattr(self, "_main_loop", None) != loop:
+            self._main_loop = loop
+            self.queue = asyncio.Queue()
+            self._worker_task = None
         if self._worker_task is None or self._worker_task.done():
             self._worker_task = asyncio.create_task(self._worker_loop())
 
@@ -120,6 +135,66 @@ class TaskQueueManager:
         self._ensure_worker()
         await self.queue.put((task_id, source_type, raw_data, filename_or_url))
         return task_id
+
+    def _ensure_insight_worker(self) -> None:
+        """노드 분석 백그라운드 워커가 돌고 있지 않다면 시작합니다."""
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return
+        if getattr(self, "_insight_loop", None) != loop:
+            self._insight_loop = loop
+            self.insight_queue = asyncio.Queue()
+            self._insight_worker_task = None
+        if self._insight_worker_task is None or self._insight_worker_task.done():
+            self._insight_worker_task = asyncio.create_task(self._insight_worker_loop())
+
+    async def _insight_worker_loop(self) -> None:
+        """대기열에서 노드 ID를 하나씩 꺼내 순차적으로 분석을 실행하는 워커 루프."""
+        while True:
+            node_id = await self.insight_queue.get()
+            self._pending_insight_node_ids.discard(node_id)
+            try:
+                with Session(get_engine()) as session:
+                    await asyncio.to_thread(generate_node_insight, session, node_id)
+            except Exception:
+                pass
+            finally:
+                self.insight_queue.task_done()
+
+    async def enqueue_node_insight(self, node_id: int) -> bool:
+        """비동기 컨텍스트에서 노드 분석을 대기열에 등록합니다 (중복 방지 및 상한 100건 준수)."""
+        if node_id in self._pending_insight_node_ids:
+            return False
+        if self.insight_queue.qsize() >= 100:
+            return False
+
+        self._pending_insight_node_ids.add(node_id)
+        self._ensure_insight_worker()
+        await self.insight_queue.put(node_id)
+        return True
+
+    def enqueue_node_insight_sync(self, node_id: int) -> bool:
+        """동기 컨텍스트(FastAPI 라우터 등)에서 비동기 워커로 노드 분석 작업을 등록합니다."""
+        if node_id in self._pending_insight_node_ids:
+            return False
+        if self.insight_queue.qsize() >= 100:
+            return False
+
+        self._pending_insight_node_ids.add(node_id)
+        loop = None
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = getattr(self, "_main_loop", None)
+
+        if loop and loop.is_running():
+            loop.call_soon_threadsafe(self._ensure_insight_worker)
+            loop.call_soon_threadsafe(self.insight_queue.put_nowait, node_id)
+            return True
+        else:
+            self._pending_insight_node_ids.discard(node_id)
+            return False
 
     def get_task(self, task_id: str) -> Optional[ExtractionTask]:
         return self.tasks.get(task_id)

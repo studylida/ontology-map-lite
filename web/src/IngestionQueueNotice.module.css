@@ -95,7 +95,22 @@
   border: 1px solid rgba(255, 255, 255, 0.06);
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
+}
+
+.taskItemFailed {
+  background: rgba(239, 68, 68, 0.04);
+  border-color: rgba(239, 68, 68, 0.25);
+}
+
+.errorNoticeBox {
+  font-size: 11px;
+  line-height: 1.4;
+  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 4px;
+  padding: 4px 8px;
 }
 
 .taskTitle {
@@ -125,6 +140,7 @@
 }
 .statusFailed {
   color: #f87171;
+  font-weight: 600;
 }
 
 .reviewBtn {
@@ -151,4 +167,13 @@
 }
 .dismissBtn:hover {
   color: #f87171;
+}
+
+.indicatorFailed {
+  border-color: rgba(248, 113, 113, 0.4);
+  color: #f87171;
+}
+.indicatorFailed:hover {
+  background: rgba(248, 113, 113, 0.15);
+  border-color: #f87171;
 }
