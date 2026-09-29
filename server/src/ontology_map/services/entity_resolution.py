@@ -18,13 +18,13 @@ def resolve_or_create_node(
     
     # 1. Classification 확인
     stmt_cls = select(Classification).where(Classification.code == classification_code)
-    classification = session.execute(stmt_cls).scalar_one_or_none()
+    classification = session.execute(stmt_cls).scalars().first()
     if not classification:
         raise ValueError(f"존재하지 않는 Classification 코드입니다: {classification_code}")
 
     # 2. 이름(name)으로 기존 Node 조회
-    stmt_node = select(Node).where(Node.name == name)
-    node = session.execute(stmt_node).scalar_one_or_none()
+    stmt_node = select(Node).where(Node.name == name).order_by(Node.id.desc())
+    node = session.execute(stmt_node).scalars().first()
 
     # 3. 노드가 없으면 새로 생성
     if node is None:
@@ -45,8 +45,8 @@ def resolve_or_create_node(
 def find_node_by_name(session: Session, name: str) -> Optional[Node]:
     """이름으로 기존 노드를 단건 조회합니다."""
     clean_name = name.strip()
-    stmt = select(Node).where(Node.name == clean_name)
-    return session.execute(stmt).scalar_one_or_none()
+    stmt = select(Node).where(Node.name == clean_name).order_by(Node.id.desc())
+    return session.execute(stmt).scalars().first()
 
 
 def get_existing_entity_names(session: Session, limit: int = 60) -> list[str]:

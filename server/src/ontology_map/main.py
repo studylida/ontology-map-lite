@@ -16,6 +16,7 @@ async def lifespan(application: FastAPI) -> AsyncIterator[None]:
     # 서버 기동 시 DB 연결 상태 확인 (Health check)
     with get_engine().connect() as connection:
         connection.execute(text("SELECT 1"))
+
     yield
 
 

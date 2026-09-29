@@ -148,6 +148,7 @@ class NodeInsight(Base):
     recent_history_summary: Mapped[str] = mapped_column(sa.Text, nullable=False)
     overall_insight: Mapped[str] = mapped_column(sa.Text, nullable=False)
     issues: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, default=list, nullable=False)
+    input_fingerprint: Mapped[Optional[str]] = mapped_column(sa.String(64), nullable=True, index=True)
 
     generated_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), server_default=sa.func.now())
 

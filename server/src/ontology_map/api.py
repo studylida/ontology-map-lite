@@ -20,7 +20,7 @@ from ontology_map.schemas import (
 )
 from ontology_map.services.entity_resolution import resolve_or_create_node
 from ontology_map.services.graph_service import get_node_by_id, get_node_subgraph
-from ontology_map.services.insight_service import get_node_insight, get_node_qa_pairs
+from ontology_map.services.insight_service import generate_node_insight, get_node_insight, get_node_qa_pairs
 from ontology_map.services.intake_service import process_intake
 from ontology_map.services.task_queue import task_queue_manager
 
@@ -115,19 +115,18 @@ def get_node_details(
     if not node:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Node not found")
 
-    # 1. 노드와 연관된 원천 Claim(인용구) 탐색 (이름 매칭)
-    stmt_claims = (
-        select(Claim)
-        .options(joinedload(Claim.document))
-        .where(
-            or_(
-                Claim.statement.ilike(f"%{node.name}%"),
-                Claim.quote_text.ilike(f"%{node.name}%"),
-            )
+    # 1. 노드에 명시적으로 연결된 Claim(인용구) 탐색 (node.claim_ids 기반)
+    target_claim_ids = node.claim_ids or []
+    claims: list[Claim] = []
+    if target_claim_ids:
+        stmt_claims = (
+            select(Claim)
+            .options(joinedload(Claim.document))
+            .where(Claim.id.in_(target_claim_ids))
+            .order_by(Claim.id.desc())
+            .limit(20)
         )
-        .limit(10)
-    )
-    claims = session.execute(stmt_claims).scalars().all()
+        claims = list(session.execute(stmt_claims).scalars().all())
     claim_items = [
         NodeClaimItem(
             id=c.id,
@@ -193,15 +192,63 @@ def get_insights(
     }
 
 
+@router.post("/nodes/{node_id}/insights/generate")
+def generate_insights_endpoint(
+    node_id: int,
+    force: bool = False,
+    session: Session = Depends(open_session),
+):
+    """특정 노드의 종합 인사이트 및 Q&A 명시적 생성/재생성 API."""
+    node = get_node_by_id(session, node_id)
+    if not node:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Node not found")
+
+    try:
+        insight, qa_pairs = generate_node_insight(session, node_id, force=force)
+        return {
+            "node_id": node.id,
+            "node_name": node.name,
+            "status": "success",
+            "insight": {
+                "recent_history_summary": insight.recent_history_summary,
+                "overall_insight": insight.overall_insight,
+                "issues": insight.issues,
+                "generated_at": insight.generated_at,
+            } if insight else None,
+            "qa_pairs": [
+                {
+                    "question": qa.question,
+                    "answer": qa.answer,
+                    "sequence": qa.sequence,
+                }
+                for qa in qa_pairs
+            ],
+        }
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"인사이트 생성 실패: {str(e)}")
+
+
 @router.post("/intake", response_model=IntakeResponse)
 def intake_external_data(
     payload: IntakePayload,
     session: Session = Depends(open_session),
 ):
     """타 프로젝트 분석 산출물을 8개 테이블로 자동 보정·적재하는 API."""
-    result = process_intake(session=session, payload=payload)
-    session.commit()
-    return result
+    try:
+        result = process_intake(session=session, payload=payload)
+        session.commit()
+
+        # 지시서 M3.5 & 4절: 승인 요청당 실제 변경 노드 최대 20개까지 백그라운드 분석 큐 등록
+        for nid in result.get("affected_node_ids", [])[:20]:
+            task_queue_manager.enqueue_node_insight_sync(nid)
+
+        return result
+    except ValueError as e:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception:
+        session.rollback()
+        raise
 
 
 @router.get("/nodes/search", response_model=list[NodeSearchItem])
