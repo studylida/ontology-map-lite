@@ -172,3 +172,57 @@ export async function intakeKnowledge(
   }
   return res.json();
 }
+
+/**
+ * 12. 네이티브 JSON을 검토 번들로 변환
+ */
+export async function convertAdapterInput(data: {
+  producer: string;
+  raw_json: Record<string, any>;
+  supplement_json?: Record<string, any>;
+}): Promise<any> {
+  const res = await fetch(`${BASE_URL}/adapters/convert`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail ?? "어댑터 변환 실패");
+  }
+  return res.json();
+}
+
+/**
+ * 13. 승인된 검토 항목 지식그래프 반영
+ */
+export async function commitAdapterInput(data: {
+  bundle: Record<string, any>;
+  enabled_ids: string[];
+}): Promise<any> {
+  const res = await fetch(`${BASE_URL}/adapters/commit`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail ?? "어댑터 반영 실패");
+  }
+  return res.json();
+}
+
+/**
+ * 14. 시연 베이스라인 시드 초기화
+ */
+export async function seedDemoData(): Promise<any> {
+  const res = await fetch(`${BASE_URL}/demo/seed`, {
+    method: "POST",
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail ?? "시연 시드 초기화 실패");
+  }
+  return res.json();
+}
+

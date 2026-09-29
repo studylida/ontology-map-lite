@@ -57,6 +57,27 @@
   box-shadow: 0 0 12px rgba(56, 189, 248, 0.4);
 }
 
+.hitlReviewBtn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  background: #143244;
+  border: 1px solid #3b6c80;
+  border-radius: 6px;
+  color: #64d1ef;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.hitlReviewBtn:hover {
+  background: #1b455c;
+  box-shadow: 0 0 12px rgba(100, 209, 239, 0.35);
+  color: #a1e8fa;
+}
+
 .fitBtn {
   display: flex;
   align-items: center;

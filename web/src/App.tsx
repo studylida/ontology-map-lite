@@ -7,6 +7,7 @@ import { NodeSearch } from "./NodeSearch";
 import { KnowledgePopover } from "./KnowledgePopover";
 import { IngestionQueueNotice } from "./IngestionQueueNotice";
 import { KnowledgeIngestionModal } from "./KnowledgeIngestionModal";
+import { HitlReviewModal } from "./HitlReviewModal";
 import { useInitialLoading } from "./useInitialLoading";
 import type {
   ExtractionTaskSummary,
@@ -34,6 +35,10 @@ export function App() {
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [modalMode, setModalMode] = useState<"input" | "review">("input");
   const [reviewTaskId, setReviewTaskId] = useState<string | null>(null);
+
+  // 2.1. 1440px 와이드 HITL 검토 모달 상태
+  const [isHitlOpen, setIsHitlOpen] = useState<boolean>(false);
+  const [hitlProducer, setHitlProducer] = useState<"news" | "gov" | "excel">("news");
 
   // 2.5. 초기 로딩 화면 & 인트로 애니메이션 상태
   const [graphReady, setGraphReady] = useState(false);
@@ -175,10 +180,25 @@ export function App() {
     setIsModalOpen(true);
   };
 
+  const handleOpenHitlModal = (prod: "news" | "gov" | "excel" = "news") => {
+    setHitlProducer(prod);
+    setIsHitlOpen(true);
+  };
+
   const handleOpenReviewModal = (taskId: string) => {
-    setReviewTaskId(taskId);
-    setModalMode("review");
-    setIsModalOpen(true);
+    const task = tasks.find((t) => t.id === taskId);
+    const src = (task?.source_project || "").toLowerCase();
+    if (src.includes("news")) {
+      handleOpenHitlModal("news");
+    } else if (src.includes("gov")) {
+      handleOpenHitlModal("gov");
+    } else if (src.includes("excel")) {
+      handleOpenHitlModal("excel");
+    } else {
+      setReviewTaskId(taskId);
+      setModalMode("review");
+      setIsModalOpen(true);
+    }
   };
 
   const handleDismissTask = async (taskId: string) => {
@@ -219,6 +239,16 @@ export function App() {
           onClick={handleOpenInputModal}
         >
           <span>✨</span> + 지식 추가
+        </button>
+
+        {/* 1440px 와이드 HITL 자료 검토 버튼 */}
+        <button
+          type="button"
+          className={styles.hitlReviewBtn}
+          onClick={() => handleOpenHitlModal("news")}
+          title="뉴스·공고·엑셀 외부 산출물을 원천 근거와 함께 1440px 와이드 모달에서 검토합니다"
+        >
+          <span>📋</span> 자료 검토 (HITL)
         </button>
 
         {/* 전체화면 맞춤 정렬 버튼 */}
@@ -321,6 +351,17 @@ export function App() {
           onIngestionSuccess={handleIngestionSuccess}
         />
       )}
+
+      {/* 1440px 와이드 HITL 검토 모달 */}
+      <HitlReviewModal
+        isOpen={isHitlOpen}
+        initialProducer={hitlProducer}
+        onClose={() => setIsHitlOpen(false)}
+        onIngestionSuccess={(newNodeId) => {
+          handleIngestionSuccess(newNodeId);
+          setIsHitlOpen(false);
+        }}
+      />
 
       {/* 초기 로딩 오버레이 */}
       {loadingPhase !== "hidden" && (
