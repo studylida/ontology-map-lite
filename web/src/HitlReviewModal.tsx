@@ -1991,7 +1991,56 @@ export function HitlReviewModal({
             </div>
           ) : activeTab === "compare" ? (
             <div className={styles.compareContainer}>
-              {/* 상단 BEFORE / AFTER 듀얼 패널 */}
+              {/* 상단 1줄 시뮬레이션 항목 선택 바 (체크박스 토글 시 아래 BEFORE/AFTER 즉각 반영) */}
+              <div className={styles.compactCandidateBar}>
+                <div className={styles.compactBarLabel}>
+                  <span className={styles.simulationIcon}>⚡</span>
+                  <strong>반영 항목 토글:</strong>
+                  <span className={styles.compactBarHint}>
+                    (체크 시 아래 AFTER 다이어그램 및 속성표 즉시 반영)
+                  </span>
+                </div>
+
+                <div className={styles.compactCandidatePills}>
+                  {bundleData?.rows?.map((row: CandidateRow) => {
+                    const isChecked = enabledItemIds.has(row.id);
+                    const isBlocked = Boolean(row.blocked);
+
+                    return (
+                      <label
+                        key={row.id}
+                        className={`${styles.candidatePill} ${
+                          isChecked ? styles.candidatePillChecked : ""
+                        } ${isBlocked ? styles.candidatePillBlocked : ""}`}
+                        title={
+                          isBlocked
+                            ? "무근거 후보는 반영이 차단되었습니다"
+                            : row.sub
+                        }
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          disabled={isBlocked}
+                          onChange={() => handleToggleItem(row.id, isBlocked)}
+                        />
+                        <span className={styles.pillTitle}>{row.title}</span>
+                        <span className={styles.pillBadge}>{row.kind}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+
+                <button
+                  type="button"
+                  className={styles.compactToggleAllBtn}
+                  onClick={handleToggleAll}
+                >
+                  {enabledItemIds.size > 0 ? "전체 해제" : "전체 선택"}
+                </button>
+              </div>
+
+              {/* BEFORE / AFTER 듀얼 패널 (한눈에 바로 비교) */}
               <div className={styles.panes}>
                 {/* 좌측 BEFORE 패널 */}
                 <div className={styles.pane}>
@@ -2030,7 +2079,7 @@ export function HitlReviewModal({
                 </div>
               </div>
 
-              {/* 중단 범례 바 */}
+              {/* 하단 범례 바 */}
               <div className={styles.legendBar}>
                 <div className={styles.legendItems}>
                   <span className={styles.legendItem}>
@@ -2047,35 +2096,8 @@ export function HitlReviewModal({
                   </span>
                 </div>
                 <span className={styles.legendNotice}>
-                  💡 다이어그램의 노드·간선을 클릭하면 하단에 상세 근거가 연동됩니다.
+                  ※ 원천 문장과 신문/공고/엑셀 원본 근거 대조는 상단 '01 근거 검토' 탭에서 확인하실 수 있습니다.
                 </span>
-              </div>
-
-              {/* 하단 후보 목록 및 근거 뷰어 (체크박스 토글 시 AFTER 다이어그램 즉시 반영) */}
-              <div className={styles.compareBottomSplit}>
-                <section className={styles.candidatePanel}>
-                  <div className={styles.panelHeader}>
-                    <h3>반영할 항목 (체크 해제 시 AFTER 다이어그램 실시간 반영)</h3>
-                    <span
-                      style={{
-                        fontSize: "11px",
-                        color: "#94a7c0",
-                        cursor: "pointer",
-                      }}
-                      onClick={handleToggleAll}
-                    >
-                      {enabledItemIds.size > 0 ? "전체 해제" : "전체 선택"}
-                    </span>
-                  </div>
-                  {renderCandidateList()}
-                </section>
-
-                <section className={styles.evidenceViewer}>
-                  <div className={styles.panelHeader}>
-                    <h3>선택한 항목의 근거와 표시 위치</h3>
-                  </div>
-                  {renderEvidenceViewer()}
-                </section>
               </div>
             </div>
           ) : (
