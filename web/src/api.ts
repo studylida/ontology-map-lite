@@ -44,6 +44,19 @@ export async function fetchSubgraph(
 }
 
 /**
+ * 3.5. 연결된 엣지(관계) 수가 가장 많은 대표 핵심 노드 단건 조회
+ */
+export async function fetchTopDegreeNode(): Promise<{
+  id: number;
+  name: string;
+  edge_count: number;
+}> {
+  const res = await fetch(`${BASE_URL}/nodes/top-degree`);
+  if (!res.ok) throw new Error("대표 중심 노드 로드 실패");
+  return res.json();
+}
+
+/**
  * 4. 특정 노드의 상세 정보(개요, 원천 근거, AI 분석, Q&A) 종합 조회
  */
 export async function fetchNodeDetails(

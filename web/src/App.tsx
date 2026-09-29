@@ -1,6 +1,6 @@
 // web/src/App.tsx
 import { useCallback, useEffect, useRef, useState } from "react";
-import { dismissAgentTask, fetchAgentTasks, fetchSubgraph, searchNodes } from "./api";
+import { dismissAgentTask, fetchAgentTasks, fetchSubgraph, fetchTopDegreeNode, searchNodes } from "./api";
 import { GraphCanvas, type GraphCanvasHandle } from "./GraphCanvas";
 import { SidePanel } from "./SidePanel";
 import { NodeSearch } from "./NodeSearch";
@@ -18,8 +18,8 @@ import styles from "./App.module.css";
 export function App() {
   const canvasRef = useRef<GraphCanvasHandle | null>(null);
 
-  // 1. 기본 3D 그래프 상태 (SK하이닉스 487 기본값)
-  const [centerNodeId, setCenterNodeId] = useState<number>(487);
+  // 1. 기본 3D 그래프 상태 (동적으로 최다 관계 노드를 감지하여 설정)
+  const [centerNodeId, setCenterNodeId] = useState<number | null>(null);
   const [nodes, setNodes] = useState<GraphNode[]>([]);
   const [edges, setEdges] = useState<GraphEdge[]>([]);
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
@@ -113,9 +113,33 @@ export function App() {
     [],
   );
 
+  // 초기 마운트 시 최다 관계(Top-Degree) 중심 노드 동적 탐색 및 로드
   useEffect(() => {
-    loadGraph(centerNodeId);
-  }, []); // 초기 마운트 시 1회만 로드
+    const initGraph = async () => {
+      try {
+        const topNode = await fetchTopDegreeNode();
+        if (topNode && topNode.id) {
+          await loadGraph(topNode.id);
+          return;
+        }
+      } catch (err) {
+        console.warn("fetchTopDegreeNode failed, falling back to search", err);
+      }
+
+      try {
+        const fallbackList = await searchNodes("");
+        if (fallbackList.length > 0) {
+          await loadGraph(fallbackList[0].id);
+          return;
+        }
+      } catch (err) {
+        console.error("No nodes found in system", err);
+        setError("시스템에 등록된 노드가 존재하지 않습니다.");
+      }
+    };
+
+    initGraph();
+  }, [loadGraph]);
 
   // 4. 비동기 대기열 폴링 (2.5초 주기)
   useEffect(() => {
@@ -142,7 +166,7 @@ export function App() {
   );
 
   const handlePanBoundary = useCallback(() => {
-    if (hasOmitted && !loading) {
+    if (hasOmitted && !loading && centerNodeId !== null) {
       loadGraph(centerNodeId, true);
     }
   }, [hasOmitted, loading, centerNodeId, loadGraph]);

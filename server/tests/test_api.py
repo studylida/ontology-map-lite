@@ -140,3 +140,23 @@ def test_get_node_details(client: TestClient, db_session: Session):
         assert "properties" in data
         assert "claims" in data
         assert "qa_pairs" in data
+
+
+def test_get_top_degree_node(client: TestClient, db_session: Session):
+    """관계(Edge) 수가 가장 많은 대표 핵심 노드 단건 조회 API 검증."""
+    # 테스트 분류 및 노드 준비
+    cls = Classification(code="TOP_TEST", display_name="Top Test", is_active=True)
+    db_session.add(cls)
+    db_session.flush()
+    node = Node(name="중심엔티티", classification_id=cls.id)
+    db_session.add(node)
+    db_session.flush()
+
+    res = client.get("/api/v1/nodes/top-degree")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["id"] == node.id
+    assert data["name"] == "중심엔티티"
+    assert "edge_count" in data
+    assert isinstance(data["edge_count"], int)
+

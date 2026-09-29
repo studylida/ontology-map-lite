@@ -3,10 +3,10 @@
 from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, File, UploadFile
 from pydantic import BaseModel, Field
-from sqlalchemy import select, or_
+from sqlalchemy import select, or_, func, union_all, desc
 from sqlalchemy.orm import Session, joinedload
 
-from ontology_map.db.schema import Claim, Classification, Document, Node, Relation
+from ontology_map.db.schema import Claim, Classification, Document, Edge, Node, Relation
 from ontology_map.db.session import open_session
 from ontology_map.schemas import (
     AgentExtractJsonRequest,
@@ -54,6 +54,12 @@ class NodeSearchItem(BaseModel):
     description: Optional[str] = None
 
 
+class TopDegreeNodeResponse(BaseModel):
+    id: int
+    name: str
+    edge_count: int
+
+
 # --- Endpoints ---
 
 @router.get("/health", response_model=HealthResponse)
@@ -88,6 +94,43 @@ def create_or_resolve_node(
     except ValueError as e:
         session.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get("/nodes/top-degree", response_model=TopDegreeNodeResponse)
+def get_top_degree_node(session: Session = Depends(open_session)):
+    """연결된 엣지(관계) 수가 가장 많은 대표 핵심 노드 단건 조회."""
+    source_counts = (
+        select(Edge.source_node_id.label("node_id"), func.count(Edge.id).label("cnt"))
+        .group_by(Edge.source_node_id)
+    )
+    target_counts = (
+        select(Edge.target_node_id.label("node_id"), func.count(Edge.id).label("cnt"))
+        .group_by(Edge.target_node_id)
+    )
+    combined = union_all(source_counts, target_counts).subquery()
+
+    stmt = (
+        select(combined.c.node_id, func.sum(combined.c.cnt).label("total_degree"))
+        .group_by(combined.c.node_id)
+        .order_by(desc("total_degree"))
+        .limit(1)
+    )
+    row = session.execute(stmt).first()
+
+    if row and row.node_id:
+        top_node = session.get(Node, row.node_id)
+        if top_node:
+            return TopDegreeNodeResponse(
+                id=top_node.id,
+                name=top_node.name,
+                edge_count=int(row.total_degree),
+            )
+
+    # 엣지가 없는 경우 가장 최근 노드 1건으로 안전하게 폴백
+    fallback_node = session.execute(select(Node).order_by(Node.id.desc())).scalars().first()
+    if not fallback_node:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="등록된 노드가 없습니다.")
+    return TopDegreeNodeResponse(id=fallback_node.id, name=fallback_node.name, edge_count=0)
 
 
 @router.get("/nodes/{node_id}/graph")
