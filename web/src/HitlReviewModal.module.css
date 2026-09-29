@@ -1061,14 +1061,19 @@
   font-size: 11px;
 }
 
-/* 상단 1줄 컴팩트 시뮬레이션 항목 토글 바 (1줄 고정 & 가로 스크롤 지원) */
+/* 상단 1줄 컴팩트 시뮬레이션 항목 토글 바 (스티키 고정 & 65% 반투명 블러 & 가로 스크롤) */
 .compactCandidateBar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 12px;
-  background: #0d1a2d;
-  border: 1px solid #1f3757;
+  background: rgba(13, 26, 45, 0.65);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(31, 55, 87, 0.75);
   border-radius: 8px;
   padding: 4px 12px;
   height: 42px;
@@ -1076,6 +1081,7 @@
   max-height: 42px;
   flex-wrap: nowrap;
   overflow: hidden;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
 }
 
 .compactBarLabel {
@@ -1217,7 +1223,12 @@
 .compareRowExcluded td {
   color: #64748b !important;
   text-decoration: line-through;
-  background: rgba(15, 23, 42, 0.35);
+  background: rgba(15, 23, 42, 0.45);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.compareRowExcluded th {
+  color: #55677d !important;
 }
 
 .excludedBadge {
@@ -1246,6 +1257,78 @@
   margin-left: 6px;
   font-weight: 600;
 }
+
+/* 은은한 반짝임(Hover-like Flash/Pulse) 애니메이션 */
+@keyframes rowFlashAppear {
+  0% {
+    background-color: transparent;
+    box-shadow: none;
+  }
+  35% {
+    background-color: rgba(100, 209, 239, 0.18);
+    box-shadow: inset 0 0 14px rgba(100, 209, 239, 0.4);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: none;
+  }
+}
+
+@keyframes rowFlashDisappear {
+  0% {
+    background-color: transparent;
+    box-shadow: none;
+  }
+  35% {
+    background-color: rgba(239, 68, 68, 0.18);
+    box-shadow: inset 0 0 14px rgba(239, 68, 68, 0.35);
+  }
+  100% {
+    background-color: rgba(15, 23, 42, 0.45);
+    box-shadow: none;
+  }
+}
+
+@keyframes svgPulseAppear {
+  0% {
+    filter: drop-shadow(0 0 0 rgba(100, 209, 239, 0));
+  }
+  40% {
+    filter: drop-shadow(0 0 16px rgba(100, 209, 239, 0.95)) brightness(1.2);
+  }
+  100% {
+    filter: drop-shadow(0 0 0 rgba(100, 209, 239, 0));
+  }
+}
+
+@keyframes svgPulseDisappear {
+  0% {
+    filter: drop-shadow(0 0 0 rgba(239, 68, 68, 0));
+  }
+  40% {
+    filter: drop-shadow(0 0 14px rgba(239, 68, 68, 0.8)) brightness(0.85);
+  }
+  100% {
+    filter: drop-shadow(0 0 0 rgba(239, 68, 68, 0));
+  }
+}
+
+.rowFlashAppear {
+  animation: rowFlashAppear 0.85s ease-out;
+}
+
+.rowFlashDisappear {
+  animation: rowFlashDisappear 0.85s ease-out;
+}
+
+.svgFlashAppear {
+  animation: svgPulseAppear 0.85s ease-out;
+}
+
+.svgFlashDisappear {
+  animation: svgPulseDisappear 0.85s ease-out;
+}
+
 
 
 

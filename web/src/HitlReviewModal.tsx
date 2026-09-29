@@ -24,6 +24,20 @@ interface CandidateRow {
   targetType?: "edge" | "property" | "report" | "blocked";
 }
 
+// 백엔드 응답 지연/누락 시에도 100% 동작을 보장하는 프론트엔드 내장 의존성 사전
+const FALLBACK_DEPENDENCIES: Record<ProducerType, Record<string, string[]>> = {
+  excel: {
+    second: ["main"], // 2024 대비 20% 증가는 2025 매출 120억원(main)에 필수 종속
+  },
+  gov: {
+    second: ["main"], // 세부 속성(총20억·최대1억·마감)은 주관 사업 노드(main)에 종속
+  },
+  news: {
+    // 뉴스 확장을 위한 슬롯
+  },
+};
+
+
 interface EvidenceLocationProps {
   location: string;
   verification: string;
@@ -75,9 +89,35 @@ export function HitlReviewModal({
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // 은은한 반짝임(Flash / Pulse) 시각 피드백 상태 (항목 ID -> appear / disappear)
+  const [flashedItemIds, setFlashedItemIds] = useState<Map<string, "appear" | "disappear">>(
+    () => new Map(),
+  );
+
   // 수동 입력 모드 지원
   const [showManualInput, setShowManualInput] = useState<boolean>(false);
   const [manualJsonText, setManualJsonText] = useState<string>("");
+
+  // 은은한 반짝임 애니메이션 트리거 함수 (850ms 동안 유지 후 자동 해제)
+  const triggerFlash = useCallback((affectedIds: string[], type: "appear" | "disappear") => {
+    setFlashedItemIds((prev) => {
+      const next = new Map(prev);
+      for (const id of affectedIds) {
+        next.set(id, type);
+      }
+      return next;
+    });
+
+    setTimeout(() => {
+      setFlashedItemIds((prev) => {
+        const next = new Map(prev);
+        for (const id of affectedIds) {
+          next.delete(id);
+        }
+        return next;
+      });
+    }, 850);
+  }, []);
 
   // 프로듀서 변경 시 번들 로드 함수
   const loadProducerBundle = useCallback(
@@ -138,16 +178,32 @@ export function HitlReviewModal({
 
   if (!isOpen) return null;
 
-  // 선행 필수 조건(dependsOn) 충족 여부 확인 (범용 DAG)
-  const isPrerequisiteMet = (
-    row: CandidateRow,
-    enabled: Set<string>,
-  ): boolean => {
-    if (!row.dependsOn || row.dependsOn.length === 0) return true;
-    return row.dependsOn.every((depId) => enabled.has(depId));
+  // 특정 항목의 선행 필수 의존 목록 추출 (백엔드 메타데이터 우선 + 프론트 fallback)
+  const getItemDependencies = (
+    rowId: string,
+    currentProducer: ProducerType,
+    rows?: CandidateRow[],
+  ): string[] => {
+    const targetRow = rows?.find((r) => r.id === rowId);
+    if (targetRow?.dependsOn && targetRow.dependsOn.length > 0) {
+      return targetRow.dependsOn;
+    }
+    return FALLBACK_DEPENDENCIES[currentProducer]?.[rowId] || [];
   };
 
-  // 체크박스 토글 핸들러 (의존 관계 자동 연쇄 해제 & 선행조건 연동)
+  // 선행 필수 조건(dependsOn) 충족 여부 확인 (범용 DAG)
+  const isPrerequisiteMet = (
+    rowId: string,
+    currentProducer: ProducerType,
+    enabled: Set<string>,
+    rows?: CandidateRow[],
+  ): boolean => {
+    const deps = getItemDependencies(rowId, currentProducer, rows);
+    if (deps.length === 0) return true;
+    return deps.every((depId) => enabled.has(depId));
+  };
+
+  // 체크박스 토글 핸들러 (의존 관계 자동 연쇄 해제 & 선행조건 연동 + 은은한 반짝임 피드백)
   const handleToggleItem = (id: string, blocked?: boolean) => {
     if (blocked) return;
 
@@ -158,31 +214,34 @@ export function HitlReviewModal({
 
       if (isCurrentlyChecked) {
         // 1. 체크 해제 시: 해당 항목 제거 및 이 항목에 의존하는 모든 자식 항목들을 재귀적 연쇄 해제 (Cascade Uncheck)
+        const toUncheck = [id];
+        const affected = [id];
         next.delete(id);
 
-        const toUncheck = [id];
         while (toUncheck.length > 0) {
           const parentId = toUncheck.pop()!;
           for (const r of rows) {
-            if (
-              r.dependsOn &&
-              r.dependsOn.includes(parentId) &&
-              next.has(r.id)
-            ) {
+            const deps = getItemDependencies(r.id, producer, rows);
+            if (deps.includes(parentId) && next.has(r.id)) {
               next.delete(r.id);
               toUncheck.push(r.id);
+              affected.push(r.id);
             }
           }
         }
+        triggerFlash(affected, "disappear");
       } else {
         // 2. 체크 시: 선행 조건 항목들이 꺼져 있으면 선행 부모들도 함께 켜줌 (Auto-enable prerequisites)
-        const targetRow = rows.find((r) => r.id === id);
-        if (targetRow && targetRow.dependsOn) {
-          for (const depId of targetRow.dependsOn) {
+        const deps = getItemDependencies(id, producer, rows);
+        const affected = [id];
+        for (const depId of deps) {
+          if (!next.has(depId)) {
             next.add(depId);
+            affected.push(depId);
           }
         }
         next.add(id);
+        triggerFlash(affected, "appear");
       }
       return next;
     });
@@ -192,12 +251,17 @@ export function HitlReviewModal({
   const handleToggleAll = () => {
     if (!bundleData?.rows) return;
     const available = bundleData.rows.filter((r: CandidateRow) => !r.blocked);
+    const availableIds: string[] = available.map((r: CandidateRow) => r.id);
+
     if (enabledItemIds.size > 0) {
       setEnabledItemIds(new Set());
+      triggerFlash(Array.from(enabledItemIds), "disappear");
     } else {
-      setEnabledItemIds(new Set(available.map((r: CandidateRow) => r.id)));
+      setEnabledItemIds(new Set(availableIds));
+      triggerFlash(availableIds, "appear");
     }
   };
+
 
   // 시연 베이스라인 시드 초기화
   const handleResetDemoSeed = async () => {
@@ -758,6 +822,13 @@ export function HitlReviewModal({
         const isSelected = selectedItemId === row.id;
         const isChecked = enabledItemIds.has(row.id);
         const isBlocked = Boolean(row.blocked);
+        const isPrereqMet = isPrerequisiteMet(
+          row.id,
+          producer,
+          enabledItemIds,
+          bundleData?.rows,
+        );
+        const isDisabled = isBlocked || (!isChecked && !isPrereqMet);
 
         let tagClass = styles.tagPanel;
         if (row.cls === "new") tagClass = styles.tagNew;
@@ -769,21 +840,37 @@ export function HitlReviewModal({
             key={row.id}
             className={`${styles.candidateRow} ${
               isSelected ? styles.selectedRow : ""
-            } ${isBlocked ? styles.blockedRow : ""}`}
+            } ${isBlocked ? styles.blockedRow : ""} ${
+              isDisabled && !isBlocked ? styles.candidatePillDisabled : ""
+            }`}
             onClick={() => setSelectedItemId(row.id)}
           >
             <div className={styles.checkboxContainer}>
               <input
                 type="checkbox"
                 checked={isChecked}
-                disabled={isBlocked}
+                disabled={isDisabled}
                 onChange={() => handleToggleItem(row.id, isBlocked)}
                 onClick={(e) => e.stopPropagation()}
                 aria-label={`${row.title} 반영 여부`}
               />
             </div>
             <div className={styles.candidateContent}>
-              <div className={styles.candidateTitle}>{row.title}</div>
+              <div className={styles.candidateTitle}>
+                {row.title}
+                {!isPrereqMet && !isChecked && !isBlocked && (
+                  <span
+                    style={{
+                      fontSize: "10.5px",
+                      marginLeft: "6px",
+                      color: "#fbbf24",
+                      fontWeight: "normal",
+                    }}
+                  >
+                    🔒선행필요
+                  </span>
+                )}
+              </div>
               <div className={styles.candidateMeta}>
                 <span className={`${styles.tag} ${tagClass}`}>{row.kind}</span>
                 <span className={styles.candidateSub}>{row.sub}</span>
@@ -794,6 +881,21 @@ export function HitlReviewModal({
       })}
     </div>
   );
+
+  // 은은한 반짝임(Flash) 클래스 추출 헬퍼
+  const getRowFlashClass = (rowId: string): string => {
+    const flashType = flashedItemIds.get(rowId);
+    if (flashType === "appear") return styles.rowFlashAppear;
+    if (flashType === "disappear") return styles.rowFlashDisappear;
+    return "";
+  };
+
+  const getSvgFlashClass = (rowId: string): string => {
+    const flashType = flashedItemIds.get(rowId);
+    if (flashType === "appear") return styles.svgFlashAppear;
+    if (flashType === "disappear") return styles.svgFlashDisappear;
+    return "";
+  };
 
   // 속성 전후 비교표 렌더링 헬퍼 (Tab 02)
   const renderComparisonTable = (side: "before" | "after") => {
@@ -808,13 +910,16 @@ export function HitlReviewModal({
               <td>한결정밀 (정밀부품 가공 · 본사)</td>
             </tr>
             <tr
-              className={
-                side === "after"
-                  ? isMainChecked
-                    ? styles.compareRowChanged
-                    : styles.compareRowExcluded
-                  : ""
-              }
+              className={`
+                ${
+                  side === "after"
+                    ? isMainChecked
+                      ? styles.compareRowChanged
+                      : styles.compareRowExcluded
+                    : ""
+                }
+                ${side === "after" ? getRowFlashClass("main") : ""}
+              `}
             >
               <th>공급 파트너</th>
               <td>
@@ -827,6 +932,9 @@ export function HitlReviewModal({
                 ) : (
                   <span>
                     — <span className={styles.excludedBadge}>반영 제외됨</span>
+                    <small style={{ color: "#94a7c0", marginLeft: "6px" }}>
+                      (상단 '누리소재 공급계약' 미체크 상태)
+                    </small>
                   </span>
                 )}
               </td>
@@ -836,13 +944,16 @@ export function HitlReviewModal({
               <td>부산공장 (운영 중 · 간선 1개)</td>
             </tr>
             <tr
-              className={
-                side === "after"
-                  ? isSecondChecked
-                    ? styles.compareRowChanged
-                    : styles.compareRowExcluded
-                  : ""
-              }
+              className={`
+                ${
+                  side === "after"
+                    ? isSecondChecked
+                      ? styles.compareRowChanged
+                      : styles.compareRowExcluded
+                    : ""
+                }
+                ${side === "after" ? getRowFlashClass("second") : ""}
+              `}
             >
               <th>리포트 카드</th>
               <td>
@@ -859,18 +970,24 @@ export function HitlReviewModal({
                     <span className={styles.excludedBadge}>
                       리포트 반영 제외
                     </span>
+                    <small style={{ color: "#94a7c0", marginLeft: "6px" }}>
+                      (상단 '2027년 증산 검토' 미체크 상태)
+                    </small>
                   </span>
                 )}
               </td>
             </tr>
             <tr
-              className={
-                side === "after"
-                  ? isMainChecked
-                    ? styles.compareRowPending
-                    : styles.compareRowExcluded
-                  : ""
-              }
+              className={`
+                ${
+                  side === "after"
+                    ? isMainChecked
+                      ? styles.compareRowPending
+                      : styles.compareRowExcluded
+                    : ""
+                }
+                ${side === "after" ? getRowFlashClass("main") : ""}
+              `}
             >
               <th>AI 분석 갱신</th>
               <td>
@@ -887,6 +1004,9 @@ export function HitlReviewModal({
                     <span className={styles.excludedBadge}>
                       계약 미반영 시 미갱신
                     </span>
+                    <small style={{ color: "#94a7c0", marginLeft: "6px" }}>
+                      (공급계약 미반영으로 종합 리포트 갱신 생략)
+                    </small>
                   </span>
                 )}
               </td>
@@ -902,13 +1022,16 @@ export function HitlReviewModal({
         <table className={styles.compareTable}>
           <tbody>
             <tr
-              className={
-                side === "after"
-                  ? isMainChecked
-                    ? styles.compareRowChanged
-                    : styles.compareRowExcluded
-                  : ""
-              }
+              className={`
+                ${
+                  side === "after"
+                    ? isMainChecked
+                      ? styles.compareRowChanged
+                      : styles.compareRowExcluded
+                    : ""
+                }
+                ${side === "after" ? getRowFlashClass("main") : ""}
+              `}
             >
               <th>주관 기관</th>
               <td>
@@ -921,18 +1044,24 @@ export function HitlReviewModal({
                 ) : (
                   <span>
                     — <span className={styles.excludedBadge}>반영 제외됨</span>
+                    <small style={{ color: "#94a7c0", marginLeft: "6px" }}>
+                      (상단 '새봄산업지원원 주관' 미체크 상태)
+                    </small>
                   </span>
                 )}
               </td>
             </tr>
             <tr
-              className={
-                side === "after"
-                  ? isMainChecked
-                    ? styles.compareRowChanged
-                    : styles.compareRowExcluded
-                  : ""
-              }
+              className={`
+                ${
+                  side === "after"
+                    ? isMainChecked
+                      ? styles.compareRowChanged
+                      : styles.compareRowExcluded
+                    : ""
+                }
+                ${side === "after" ? getRowFlashClass("main") : ""}
+              `}
             >
               <th>지원 사업</th>
               <td>
@@ -946,18 +1075,24 @@ export function HitlReviewModal({
                 ) : (
                   <span>
                     — <span className={styles.excludedBadge}>반영 제외됨</span>
+                    <small style={{ color: "#94a7c0", marginLeft: "6px" }}>
+                      (상단 공고 노드 생성 미체크 상태)
+                    </small>
                   </span>
                 )}
               </td>
             </tr>
             <tr
-              className={
-                side === "after"
-                  ? isSecondChecked
-                    ? styles.compareRowChanged
-                    : styles.compareRowExcluded
-                  : ""
-              }
+              className={`
+                ${
+                  side === "after"
+                    ? isSecondChecked
+                      ? styles.compareRowChanged
+                      : styles.compareRowExcluded
+                    : ""
+                }
+                ${side === "after" ? getRowFlashClass("second") : ""}
+              `}
             >
               <th>사업 세부 속성</th>
               <td>
@@ -973,18 +1108,24 @@ export function HitlReviewModal({
                     <span className={styles.excludedBadge}>
                       속성 반영 제외 (기본명칭만 등록)
                     </span>
+                    <small style={{ color: "#94a7c0", marginLeft: "6px" }}>
+                      (상단 '사업 예산·지원 상한' 미체크 상태)
+                    </small>
                   </span>
                 )}
               </td>
             </tr>
             <tr
-              className={
-                side === "after"
-                  ? isNoteChecked
-                    ? styles.compareRowChanged
-                    : styles.compareRowExcluded
-                  : ""
-              }
+              className={`
+                ${
+                  side === "after"
+                    ? isNoteChecked
+                      ? styles.compareRowChanged
+                      : styles.compareRowExcluded
+                    : ""
+                }
+                ${side === "after" ? getRowFlashClass("note") : ""}
+              `}
             >
               <th>추천의견 리포트</th>
               <td>
@@ -1001,6 +1142,9 @@ export function HitlReviewModal({
                     <span className={styles.excludedBadge}>
                       리포트 반영 제외
                     </span>
+                    <small style={{ color: "#94a7c0", marginLeft: "6px" }}>
+                      (상단 '신청 검토 의견' 미체크 상태)
+                    </small>
                   </span>
                 )}
               </td>
@@ -1033,16 +1177,19 @@ export function HitlReviewModal({
             </tr>
             <tr>
               <th>2024년 별도 매출</th>
-              <td>100억원 (실적!B3 기준치)</td>
+              <td>100억원 (실적!B3 기준치 유지)</td>
             </tr>
             <tr
-              className={
-                side === "after"
-                  ? isMainChecked
-                    ? styles.compareRowChanged
-                    : styles.compareRowExcluded
-                  : ""
-              }
+              className={`
+                ${
+                  side === "after"
+                    ? isMainChecked
+                      ? styles.compareRowChanged
+                      : styles.compareRowExcluded
+                    : ""
+                }
+                ${side === "after" ? getRowFlashClass("main") : ""}
+              `}
             >
               <th>2025년 별도 매출</th>
               <td>
@@ -1055,18 +1202,24 @@ export function HitlReviewModal({
                 ) : (
                   <span>
                     — <span className={styles.excludedBadge}>매출 반영 제외</span>
+                    <small style={{ color: "#94a7c0", marginLeft: "6px" }}>
+                      (상단 '2025년 매출 120억원' 미체크 상태 · 기존 100억원만 유지)
+                    </small>
                   </span>
                 )}
               </td>
             </tr>
             <tr
-              className={
-                side === "after"
-                  ? isSecondChecked
-                    ? styles.compareRowChanged
-                    : styles.compareRowExcluded
-                  : ""
-              }
+              className={`
+                ${
+                  side === "after"
+                    ? isSecondChecked
+                      ? styles.compareRowChanged
+                      : styles.compareRowExcluded
+                    : ""
+                }
+                ${side === "after" ? getRowFlashClass("second") : ""}
+              `}
             >
               <th>전년 대비 증감률</th>
               <td>
@@ -1079,18 +1232,24 @@ export function HitlReviewModal({
                 ) : (
                   <span>
                     — <span className={styles.excludedBadge}>증감률 제외</span>
+                    <small style={{ color: "#94a7c0", marginLeft: "6px" }}>
+                      (선행 2025년 매출 120억원 미체크로 계산 제외)
+                    </small>
                   </span>
                 )}
               </td>
             </tr>
             <tr
-              className={
-                side === "after"
-                  ? isNoteChecked
-                    ? styles.compareRowChanged
-                    : styles.compareRowExcluded
-                  : ""
-              }
+              className={`
+                ${
+                  side === "after"
+                    ? isNoteChecked
+                      ? styles.compareRowChanged
+                      : styles.compareRowExcluded
+                    : ""
+                }
+                ${side === "after" ? getRowFlashClass("note") : ""}
+              `}
             >
               <th>수요추정 리포트</th>
               <td>
@@ -1107,6 +1266,9 @@ export function HitlReviewModal({
                     <span className={styles.excludedBadge}>
                       리포트 반영 제외
                     </span>
+                    <small style={{ color: "#94a7c0", marginLeft: "6px" }}>
+                      (상단 '수요 증가 가능성' 미체크 상태)
+                    </small>
                   </span>
                 )}
               </td>
@@ -1178,7 +1340,7 @@ export function HitlReviewModal({
             <g
               className={`${styles.svgNode} ${
                 isSelected ? styles.svgNodeSelected : ""
-              }`}
+              } ${side === "after" ? getSvgFlashClass("main") : ""}`}
               onClick={() => setSelectedItemId("main")}
             >
               <rect
@@ -1222,7 +1384,10 @@ export function HitlReviewModal({
               </text>
             </g>
           ) : (
-            <g opacity="0.6">
+            <g
+              opacity="0.6"
+              className={side === "after" ? getSvgFlashClass("main") : ""}
+            >
               <rect
                 x="40"
                 y="55"
@@ -1259,7 +1424,9 @@ export function HitlReviewModal({
           {/* 2. 공급 계약 간선 (누리소재 -> 한결정밀) */}
           {showNewEdge ? (
             <g
-              className={styles.svgEdge}
+              className={`${styles.svgEdge} ${
+                side === "after" ? getSvgFlashClass("main") : ""
+              }`}
               onClick={() => setSelectedItemId("main")}
             >
               <line
@@ -1409,7 +1576,7 @@ export function HitlReviewModal({
     } else if (producer === "gov") {
       const isMainChecked = enabledItemIds.has("main");
       const isSecondChecked = enabledItemIds.has("second");
-      const showGovNodes = !isBefore && (isMainChecked || isSecondChecked);
+      const showGovNodes = !isBefore && isMainChecked;
       const isMainSelected = selectedItemId === "main";
       const isSecondSelected = selectedItemId === "second";
 
@@ -1428,7 +1595,7 @@ export function HitlReviewModal({
               <g
                 className={`${styles.svgNode} ${
                   isMainSelected ? styles.svgNodeSelected : ""
-                }`}
+                } ${side === "after" ? getSvgFlashClass("main") : ""}`}
                 onClick={() => setSelectedItemId("main")}
               >
                 <rect
@@ -1474,7 +1641,9 @@ export function HitlReviewModal({
 
               {/* 2. 주관 간선 (새봄산업지원원 -> 실증지원) */}
               <g
-                className={styles.svgEdge}
+                className={`${styles.svgEdge} ${
+                  side === "after" ? getSvgFlashClass("main") : ""
+                }`}
                 onClick={() => setSelectedItemId("main")}
               >
                 <line
@@ -1512,6 +1681,10 @@ export function HitlReviewModal({
               <g
                 className={`${styles.svgNode} ${
                   isSecondSelected ? styles.svgNodeSelected : ""
+                } ${
+                  side === "after"
+                    ? getSvgFlashClass("second") || getSvgFlashClass("main")
+                    : ""
                 }`}
                 onClick={() => setSelectedItemId("second")}
               >
@@ -1589,7 +1762,10 @@ export function HitlReviewModal({
               </g>
             </g>
           ) : (
-            <g opacity="0.75">
+            <g
+              opacity="0.75"
+              className={side === "after" ? getSvgFlashClass("main") : ""}
+            >
               <rect
                 x="70"
                 y="55"
@@ -1769,6 +1945,10 @@ export function HitlReviewModal({
             <g
               className={`${styles.svgNode} ${
                 isSecondSelected ? styles.svgNodeSelected : ""
+              } ${
+                side === "after"
+                  ? getSvgFlashClass("second") || getSvgFlashClass("main")
+                  : ""
               }`}
               onClick={() => setSelectedItemId("second")}
             >
@@ -1819,7 +1999,10 @@ export function HitlReviewModal({
               </text>
             </g>
           ) : (
-            <g opacity="0.75">
+            <g
+              opacity="0.75"
+              className={side === "after" ? getSvgFlashClass("main") : ""}
+            >
               <line
                 x1="217"
                 y1="93"
@@ -2069,7 +2252,12 @@ export function HitlReviewModal({
                   {bundleData?.rows?.map((row: CandidateRow) => {
                     const isChecked = enabledItemIds.has(row.id);
                     const isBlocked = Boolean(row.blocked);
-                    const isPrereqMet = isPrerequisiteMet(row, enabledItemIds);
+                    const isPrereqMet = isPrerequisiteMet(
+                      row.id,
+                      producer,
+                      enabledItemIds,
+                      bundleData?.rows,
+                    );
                     const isDisabled = isBlocked || (!isChecked && !isPrereqMet);
 
                     let tooltip = row.sub;
@@ -2097,7 +2285,21 @@ export function HitlReviewModal({
                           disabled={isDisabled}
                           onChange={() => handleToggleItem(row.id, isBlocked)}
                         />
-                        <span className={styles.pillTitle}>{row.title}</span>
+                        <span className={styles.pillTitle}>
+                          {row.title}
+                          {!isPrereqMet && !isChecked && !isBlocked && (
+                            <span
+                              style={{
+                                fontSize: "10px",
+                                marginLeft: "5px",
+                                color: "#fbbf24",
+                                fontWeight: "normal",
+                              }}
+                            >
+                              🔒선행필요
+                            </span>
+                          )}
+                        </span>
                         <span className={styles.pillBadge}>{row.kind}</span>
                       </label>
                     );
