@@ -713,6 +713,1089 @@ export function HitlReviewModal({
     return null;
   };
 
+  // 후보 목록 렌더링 헬퍼 (Tab 01 및 Tab 02 공용)
+  const renderCandidateList = () => (
+    <div className={styles.candidateList}>
+      {bundleData?.rows?.map((row: CandidateRow) => {
+        const isSelected = selectedItemId === row.id;
+        const isChecked = enabledItemIds.has(row.id);
+        const isBlocked = Boolean(row.blocked);
+
+        let tagClass = styles.tagPanel;
+        if (row.cls === "new") tagClass = styles.tagNew;
+        if (row.cls === "note") tagClass = styles.tagNote;
+        if (row.cls === "warn" || isBlocked) tagClass = styles.tagWarn;
+
+        return (
+          <div
+            key={row.id}
+            className={`${styles.candidateRow} ${
+              isSelected ? styles.selectedRow : ""
+            } ${isBlocked ? styles.blockedRow : ""}`}
+            onClick={() => setSelectedItemId(row.id)}
+          >
+            <div className={styles.checkboxContainer}>
+              <input
+                type="checkbox"
+                checked={isChecked}
+                disabled={isBlocked}
+                onChange={() => handleToggleItem(row.id, isBlocked)}
+                onClick={(e) => e.stopPropagation()}
+                aria-label={`${row.title} 반영 여부`}
+              />
+            </div>
+            <div className={styles.candidateContent}>
+              <div className={styles.candidateTitle}>{row.title}</div>
+              <div className={styles.candidateMeta}>
+                <span className={`${styles.tag} ${tagClass}`}>{row.kind}</span>
+                <span className={styles.candidateSub}>{row.sub}</span>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  // 속성 전후 비교표 렌더링 헬퍼 (Tab 02)
+  const renderComparisonTable = (side: "before" | "after") => {
+    if (producer === "news") {
+      const isMainChecked = enabledItemIds.has("main");
+      return (
+        <table className={styles.compareTable}>
+          <tbody>
+            <tr>
+              <th>기준 기업</th>
+              <td>한결정밀 (정밀부품 가공 · 본사)</td>
+            </tr>
+            <tr
+              className={
+                side === "after" && isMainChecked ? styles.compareRowChanged : ""
+              }
+            >
+              <th>공급 파트너</th>
+              <td>
+                {side === "before" || !isMainChecked ? (
+                  <span style={{ color: "#7b93ae" }}>정보 없음 (미등록)</span>
+                ) : (
+                  <span>
+                    <strong>누리소재</strong> (2026.09.25 공급계약 신규 연결)
+                  </span>
+                )}
+              </td>
+            </tr>
+            <tr>
+              <th>소유 시설</th>
+              <td>부산공장 (운영 중 · 간선 1개)</td>
+            </tr>
+            <tr
+              className={
+                side === "after" && isMainChecked ? styles.compareRowPending : ""
+              }
+            >
+              <th>AI 분석 리포트</th>
+              <td>
+                {side === "before" ? (
+                  <span style={{ color: "#7b93ae" }}>
+                    2024년도 기준 종합 리포트
+                  </span>
+                ) : (
+                  <span>
+                    <strong>종합 리포트 갱신 예정</strong> (누리소재 공급계약
+                    반영)
+                  </span>
+                )}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      );
+    } else if (producer === "gov") {
+      const isMainChecked = enabledItemIds.has("main");
+      const isSecondChecked = enabledItemIds.has("second");
+      return (
+        <table className={styles.compareTable}>
+          <tbody>
+            <tr>
+              <th>기준 기업</th>
+              <td>
+                {side === "before" ? (
+                  "한결정밀"
+                ) : (
+                  <span>
+                    한결정밀{" "}
+                    <span className={styles.tagNote}>신청 검토 추천 대상</span>
+                  </span>
+                )}
+              </td>
+            </tr>
+            <tr
+              className={
+                side === "after" && isMainChecked ? styles.compareRowChanged : ""
+              }
+            >
+              <th>주관 기관</th>
+              <td>
+                {side === "before" || !isMainChecked ? (
+                  <span style={{ color: "#7b93ae" }}>정보 없음 (미등록)</span>
+                ) : (
+                  <span>
+                    <strong>새봄산업지원원</strong> (신규 주관기관 노드)
+                  </span>
+                )}
+              </td>
+            </tr>
+            <tr
+              className={
+                side === "after" && isSecondChecked
+                  ? styles.compareRowChanged
+                  : ""
+              }
+            >
+              <th>지원 사업</th>
+              <td>
+                {side === "before" || !isSecondChecked ? (
+                  <span style={{ color: "#7b93ae" }}>정보 없음</span>
+                ) : (
+                  <span>
+                    <strong>2026 제조데이터 실증지원 사업</strong> (총 20억 /
+                    기업당 1억)
+                  </span>
+                )}
+              </td>
+            </tr>
+            <tr className={side === "after" ? styles.compareRowProtected : ""}>
+              <th>기업 연계 관계</th>
+              <td>
+                {side === "before" ? (
+                  <span style={{ color: "#7b93ae" }}>해당 없음</span>
+                ) : (
+                  <span>
+                    <strong>선정·수령 간선 없음</strong> (지침 준수 · 독립 묶음)
+                  </span>
+                )}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      );
+    } else {
+      // excel
+      const isMainChecked = enabledItemIds.has("main");
+      const isSecondChecked = enabledItemIds.has("second");
+      return (
+        <table className={styles.compareTable}>
+          <tbody>
+            <tr>
+              <th>기준 기업</th>
+              <td>
+                {side === "before" ? (
+                  "한결정밀"
+                ) : (
+                  <span>
+                    한결정밀 <span className={styles.tagWarn}>속성 보강</span>
+                  </span>
+                )}
+              </td>
+            </tr>
+            <tr>
+              <th>2024년 별도 매출</th>
+              <td>100억원 (실적!B3 기준치)</td>
+            </tr>
+            <tr
+              className={
+                side === "after" && isMainChecked ? styles.compareRowChanged : ""
+              }
+            >
+              <th>2025년 별도 매출</th>
+              <td>
+                {side === "before" || !isMainChecked ? (
+                  <span style={{ color: "#7b93ae" }}>미등록 (공백)</span>
+                ) : (
+                  <span>
+                    <strong>120억원</strong> (실적!C3 발췌 · 신규 적재)
+                  </span>
+                )}
+              </td>
+            </tr>
+            <tr
+              className={
+                side === "after" && isSecondChecked
+                  ? styles.compareRowChanged
+                  : ""
+              }
+            >
+              <th>전년 대비 증감률</th>
+              <td>
+                {side === "before" || !isSecondChecked ? (
+                  <span style={{ color: "#7b93ae" }}>산식 없음</span>
+                ) : (
+                  <span>
+                    <strong>+20% 증가</strong> ((120 - 100) / 100 × 100)
+                  </span>
+                )}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      );
+    }
+  };
+
+  // 2D SVG 경량 듀얼 다이어그램 렌더링 헬퍼 (Tab 02)
+  const renderDualGraph = (side: "before" | "after") => {
+    const isBefore = side === "before";
+
+    const defs = (
+      <defs>
+        <marker
+          id={`arrow-default-${side}`}
+          viewBox="0 0 10 10"
+          refX="7"
+          refY="5"
+          markerWidth="6"
+          markerHeight="6"
+          orient="auto-start-reverse"
+        >
+          <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#59708d" />
+        </marker>
+        <marker
+          id={`arrow-cyan-${side}`}
+          viewBox="0 0 10 10"
+          refX="7"
+          refY="5"
+          markerWidth="6"
+          markerHeight="6"
+          orient="auto-start-reverse"
+        >
+          <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#64d1ef" />
+        </marker>
+        <marker
+          id={`arrow-sky-${side}`}
+          viewBox="0 0 10 10"
+          refX="7"
+          refY="5"
+          markerWidth="6"
+          markerHeight="6"
+          orient="auto-start-reverse"
+        >
+          <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#38bdf8" />
+        </marker>
+      </defs>
+    );
+
+    if (producer === "news") {
+      const isMainChecked = enabledItemIds.has("main");
+      const showNewEdge = !isBefore && isMainChecked;
+      const isSelected = selectedItemId === "main";
+
+      return (
+        <svg
+          className={styles.graphSvg}
+          viewBox="0 0 540 220"
+          role="img"
+          aria-label={`News Agent ${side.toUpperCase()} 그래프`}
+        >
+          {defs}
+
+          {/* 1. 누리소재 노드 영역 (x: 40, y: 55, w: 130, h: 46) */}
+          {showNewEdge ? (
+            <g
+              className={`${styles.svgNode} ${
+                isSelected ? styles.svgNodeSelected : ""
+              }`}
+              onClick={() => setSelectedItemId("main")}
+            >
+              <rect
+                x="40"
+                y="55"
+                width="130"
+                height="46"
+                rx="7"
+                fill="#133144"
+                stroke={isSelected ? "#64d1ef" : "#3b82a6"}
+                strokeWidth={isSelected ? 2 : 1.5}
+              />
+              <rect
+                x="44"
+                y="59"
+                width="34"
+                height="15"
+                rx="3"
+                fill="#1e485f"
+              />
+              <text
+                x="48"
+                y="70"
+                fill="#64d1ef"
+                fontSize="9"
+                fontWeight="700"
+              >
+                + 신규
+              </text>
+              <text
+                x="85"
+                y="73"
+                fill="#ffffff"
+                fontSize="13"
+                fontWeight="700"
+              >
+                누리소재
+              </text>
+              <text x="85" y="90" fill="#94a7c0" fontSize="10">
+                소재 공급 기업
+              </text>
+            </g>
+          ) : (
+            <g opacity="0.6">
+              <rect
+                x="40"
+                y="55"
+                width="130"
+                height="46"
+                rx="7"
+                fill="#0d1726"
+                stroke="#25354e"
+                strokeWidth="1.2"
+                strokeDasharray="4 3"
+              />
+              <text
+                x="105"
+                y="76"
+                textAnchor="middle"
+                fill="#64748b"
+                fontSize="11"
+                fontWeight="600"
+              >
+                공급 계약처 없음
+              </text>
+              <text
+                x="105"
+                y="91"
+                textAnchor="middle"
+                fill="#475569"
+                fontSize="9.5"
+              >
+                (2026.09 미등록)
+              </text>
+            </g>
+          )}
+
+          {/* 2. 공급 계약 간선 (누리소재 -> 한결정밀) */}
+          {showNewEdge ? (
+            <g
+              className={styles.svgEdge}
+              onClick={() => setSelectedItemId("main")}
+            >
+              <line
+                x1="170"
+                y1="78"
+                x2="280"
+                y2="78"
+                stroke="#64d1ef"
+                strokeWidth="2.2"
+                markerEnd={`url(#arrow-cyan-${side})`}
+              />
+              <rect
+                x="180"
+                y="63"
+                width="90"
+                height="16"
+                rx="4"
+                fill="#0d2434"
+                stroke="#2c5b73"
+                strokeWidth="1"
+              />
+              <text
+                x="225"
+                y="75"
+                textAnchor="middle"
+                fill="#64d1ef"
+                fontSize="10"
+                fontWeight="700"
+              >
+                공급 계약 (09.25)
+              </text>
+            </g>
+          ) : (
+            <line
+              x1="170"
+              y1="78"
+              x2="280"
+              y2="78"
+              stroke="#1e2c3e"
+              strokeWidth="1.2"
+              strokeDasharray="4 3"
+            />
+          )}
+
+          {/* 3. 한결정밀 노드 (x: 290, y: 55, w: 135, h: 46) - 좌우 위치 100% 동일 */}
+          <g className={styles.svgNode}>
+            <rect
+              x="290"
+              y="55"
+              width="135"
+              height="46"
+              rx="7"
+              fill="#122438"
+              stroke="#345474"
+              strokeWidth="1.5"
+            />
+            <text
+              x="357"
+              y="74"
+              textAnchor="middle"
+              fill="#ffffff"
+              fontSize="13"
+              fontWeight="700"
+            >
+              한결정밀
+            </text>
+            <text
+              x="357"
+              y="90"
+              textAnchor="middle"
+              fill="#94a7c0"
+              fontSize="10"
+            >
+              정밀부품 가공 · 본사
+            </text>
+          </g>
+
+          {/* 4. 운영 간선 (한결정밀 -> 부산공장) */}
+          <line
+            x1="357"
+            y1="101"
+            x2="415"
+            y2="145"
+            stroke="#405973"
+            strokeWidth="1.5"
+            markerEnd={`url(#arrow-default-${side})`}
+          />
+          <rect x="365" y="115" width="34" height="15" rx="3" fill="#0b1728" />
+          <text
+            x="382"
+            y="126"
+            textAnchor="middle"
+            fill="#7d96b2"
+            fontSize="9.5"
+          >
+            운영
+          </text>
+
+          {/* 5. 부산공장 노드 (x: 375, y: 145, w: 105, h: 36) - 좌우 위치 100% 동일 */}
+          <g className={styles.svgNode}>
+            <rect
+              x="375"
+              y="145"
+              width="105"
+              height="36"
+              rx="6"
+              fill="#101c2d"
+              stroke="#273d56"
+              strokeWidth="1.2"
+            />
+            <text
+              x="427"
+              y="163"
+              textAnchor="middle"
+              fill="#e2e8f0"
+              fontSize="11.5"
+              fontWeight="600"
+            >
+              부산공장
+            </text>
+            <text
+              x="427"
+              y="174"
+              textAnchor="middle"
+              fill="#71869e"
+              fontSize="9"
+            >
+              제조 시설
+            </text>
+          </g>
+
+          {/* 하단 요약 안내 */}
+          <text
+            x="270"
+            y="206"
+            textAnchor="middle"
+            fill={showNewEdge ? "#64d1ef" : "#64748b"}
+            fontSize="11"
+            fontWeight="600"
+          >
+            {showNewEdge
+              ? "✨ 누리소재 → 한결정밀 공급 계약 선(Edge) 1개 추가 예정"
+              : "기준 상태: 기존 등록된 한결정밀 - 부산공장 연결 유지"}
+          </text>
+        </svg>
+      );
+    } else if (producer === "gov") {
+      const isMainChecked = enabledItemIds.has("main");
+      const isSecondChecked = enabledItemIds.has("second");
+      const showGovNodes = !isBefore && (isMainChecked || isSecondChecked);
+      const isMainSelected = selectedItemId === "main";
+      const isSecondSelected = selectedItemId === "second";
+
+      return (
+        <svg
+          className={styles.graphSvg}
+          viewBox="0 0 540 220"
+          role="img"
+          aria-label={`GovInsight ${side.toUpperCase()} 그래프`}
+        >
+          {defs}
+
+          {/* 1. 정부지원 독립 묶음 영역 (새봄산업지원원 -> 실증지원) */}
+          {showGovNodes ? (
+            <g>
+              {/* 새봄산업지원원 노드 (x: 40, y: 45, w: 135, h: 42) */}
+              <g
+                className={`${styles.svgNode} ${
+                  isMainSelected ? styles.svgNodeSelected : ""
+                }`}
+                onClick={() => setSelectedItemId("main")}
+              >
+                <rect
+                  x="40"
+                  y="45"
+                  width="135"
+                  height="42"
+                  rx="6"
+                  fill="#172b3c"
+                  stroke={isMainSelected ? "#64d1ef" : "#3b7296"}
+                  strokeWidth={isMainSelected ? 2 : 1.5}
+                />
+                <rect
+                  x="44"
+                  y="49"
+                  width="34"
+                  height="14"
+                  rx="3"
+                  fill="#1b455f"
+                />
+                <text
+                  x="47"
+                  y="59"
+                  fill="#64d1ef"
+                  fontSize="9"
+                  fontWeight="700"
+                >
+                  + 신규
+                </text>
+                <text
+                  x="84"
+                  y="63"
+                  fill="#ffffff"
+                  fontSize="12"
+                  fontWeight="700"
+                >
+                  새봄산업지원원
+                </text>
+                <text x="84" y="78" fill="#94a7c0" fontSize="9.5">
+                  공고 주관기관
+                </text>
+              </g>
+
+              {/* 주관 화살표 간선 */}
+              <g
+                className={styles.svgEdge}
+                onClick={() => setSelectedItemId("main")}
+              >
+                <line
+                  x1="107"
+                  y1="87"
+                  x2="107"
+                  y2="120"
+                  stroke="#38bdf8"
+                  strokeWidth="2"
+                  markerEnd={`url(#arrow-sky-${side})`}
+                />
+                <rect
+                  x="113"
+                  y="96"
+                  width="30"
+                  height="14"
+                  rx="3"
+                  fill="#0c1d2e"
+                  stroke="#244b68"
+                  strokeWidth="0.8"
+                />
+                <text
+                  x="128"
+                  y="107"
+                  textAnchor="middle"
+                  fill="#38bdf8"
+                  fontSize="9.5"
+                  fontWeight="700"
+                >
+                  주관
+                </text>
+              </g>
+
+              {/* 2026 제조데이터 실증지원 사업 노드 (x: 25, y: 120, w: 185, h: 44) */}
+              <g
+                className={`${styles.svgNode} ${
+                  isSecondSelected ? styles.svgNodeSelected : ""
+                }`}
+                onClick={() => setSelectedItemId("second")}
+              >
+                <rect
+                  x="25"
+                  y="120"
+                  width="185"
+                  height="44"
+                  rx="7"
+                  fill="#241e38"
+                  stroke={isSecondSelected ? "#a855f7" : "#5d4681"}
+                  strokeWidth={isSecondSelected ? 2 : 1.5}
+                />
+                <rect
+                  x="29"
+                  y="124"
+                  width="34"
+                  height="14"
+                  rx="3"
+                  fill="#3a2a56"
+                />
+                <text
+                  x="32"
+                  y="134"
+                  fill="#c084fc"
+                  fontSize="9"
+                  fontWeight="700"
+                >
+                  + 신규
+                </text>
+                <text
+                  x="69"
+                  y="138"
+                  fill="#ffffff"
+                  fontSize="12"
+                  fontWeight="700"
+                >
+                  제조데이터 실증지원
+                </text>
+                <text
+                  x="117"
+                  y="154"
+                  textAnchor="middle"
+                  fill="#c4b5fd"
+                  fontSize="9.5"
+                >
+                  총예산 20억 · 기업당 1억
+                </text>
+              </g>
+            </g>
+          ) : (
+            <g opacity="0.6">
+              <rect
+                x="25"
+                y="45"
+                width="185"
+                height="115"
+                rx="8"
+                fill="#0d1726"
+                stroke="#25354e"
+                strokeWidth="1.2"
+                strokeDasharray="4 3"
+              />
+              <text
+                x="117"
+                y="98"
+                textAnchor="middle"
+                fill="#64748b"
+                fontSize="12"
+                fontWeight="600"
+              >
+                정부지원사업 없음
+              </text>
+              <text
+                x="117"
+                y="116"
+                textAnchor="middle"
+                fill="#475569"
+                fontSize="10"
+              >
+                (주관기관 및 공고 미연계)
+              </text>
+            </g>
+          )}
+
+          {/* 2. 한결정밀 노드 (x: 320, y: 55, w: 135, h: 46) - 좌우 위치 동일 */}
+          <g className={styles.svgNode}>
+            <rect
+              x="320"
+              y="55"
+              width="135"
+              height="46"
+              rx="7"
+              fill="#122438"
+              stroke="#345474"
+              strokeWidth="1.5"
+            />
+            <text
+              x="387"
+              y="74"
+              textAnchor="middle"
+              fill="#ffffff"
+              fontSize="13"
+              fontWeight="700"
+            >
+              한결정밀
+            </text>
+            <text
+              x="387"
+              y="90"
+              textAnchor="middle"
+              fill="#94a7c0"
+              fontSize="10"
+            >
+              기존 기업 (신청 검토 권고)
+            </text>
+          </g>
+
+          {/* 3. 운영 간선 (한결정밀 -> 부산공장) */}
+          <line
+            x1="387"
+            y1="101"
+            x2="430"
+            y2="145"
+            stroke="#405973"
+            strokeWidth="1.5"
+            markerEnd={`url(#arrow-default-${side})`}
+          />
+          <rect x="390" y="115" width="34" height="15" rx="3" fill="#0b1728" />
+          <text
+            x="407"
+            y="126"
+            textAnchor="middle"
+            fill="#7d96b2"
+            fontSize="9.5"
+          >
+            운영
+          </text>
+
+          {/* 4. 부산공장 노드 (x: 385, y: 145, w: 105, h: 36) - 좌우 위치 동일 */}
+          <g className={styles.svgNode}>
+            <rect
+              x="385"
+              y="145"
+              width="105"
+              height="36"
+              rx="6"
+              fill="#101c2d"
+              stroke="#273d56"
+              strokeWidth="1.2"
+            />
+            <text
+              x="437"
+              y="163"
+              textAnchor="middle"
+              fill="#e2e8f0"
+              fontSize="11.5"
+              fontWeight="600"
+            >
+              부산공장
+            </text>
+            <text
+              x="437"
+              y="174"
+              textAnchor="middle"
+              fill="#71869e"
+              fontSize="9"
+            >
+              제조 시설
+            </text>
+          </g>
+
+          {/* 5. 보호 뱃지 (한결정밀-사업 간 선정 간선 절대 생성 금지 원칙) */}
+          {showGovNodes ? (
+            <g>
+              <rect
+                x="50"
+                y="185"
+                width="440"
+                height="24"
+                rx="5"
+                fill="rgba(22, 101, 52, 0.2)"
+                stroke="#16a34a"
+                strokeWidth="1"
+              />
+              <text
+                x="270"
+                y="201"
+                textAnchor="middle"
+                fill="#4ade80"
+                fontSize="10.5"
+                fontWeight="700"
+              >
+                🛡️ 무근거 선정·수령 간선 생성 차단 · 독립 주관 프로그램으로 적재
+              </text>
+            </g>
+          ) : (
+            <text
+              x="270"
+              y="202"
+              textAnchor="middle"
+              fill="#64748b"
+              fontSize="11"
+            >
+              기준 상태: 공고 및 기관 데이터 없음
+            </text>
+          )}
+        </svg>
+      );
+    } else {
+      // Excel Agent
+      const isMainChecked = enabledItemIds.has("main");
+      const isSecondChecked = enabledItemIds.has("second");
+      const isMainSelected = selectedItemId === "main";
+      const isSecondSelected = selectedItemId === "second";
+      const showNewMetric = !isBefore && isMainChecked;
+
+      return (
+        <svg
+          className={styles.graphSvg}
+          viewBox="0 0 540 220"
+          role="img"
+          aria-label={`Excel Agent ${side.toUpperCase()} 그래프`}
+        >
+          {defs}
+
+          {/* 1. 한결정밀 노드 (x: 140, y: 45, w: 155, h: 48) */}
+          <g
+            className={`${styles.svgNode} ${
+              isMainSelected ? styles.svgNodeSelected : ""
+            }`}
+            onClick={() => setSelectedItemId("main")}
+          >
+            <rect
+              x="140"
+              y="45"
+              width="155"
+              height="48"
+              rx="7"
+              fill={showNewMetric ? "#133549" : "#122438"}
+              stroke={
+                showNewMetric
+                  ? isMainSelected
+                    ? "#64d1ef"
+                    : "#f59e0b"
+                  : "#345474"
+              }
+              strokeWidth={showNewMetric ? 2 : 1.5}
+            />
+            {showNewMetric && (
+              <>
+                <rect
+                  x="142"
+                  y="47"
+                  width="46"
+                  height="15"
+                  rx="3"
+                  fill="#452709"
+                />
+                <text
+                  x="146"
+                  y="58"
+                  fill="#f59e0b"
+                  fontSize="9"
+                  fontWeight="700"
+                >
+                  값 보강
+                </text>
+              </>
+            )}
+            <text
+              x="217"
+              y={showNewMetric ? 70 : 66}
+              textAnchor="middle"
+              fill="#ffffff"
+              fontSize="13"
+              fontWeight="700"
+            >
+              한결정밀
+            </text>
+            <text
+              x="217"
+              y={showNewMetric ? 84 : 82}
+              textAnchor="middle"
+              fill="#94a7c0"
+              fontSize="10"
+            >
+              정밀부품 가공 · 본사
+            </text>
+          </g>
+
+          {/* 2. 운영 간선 (한결정밀 -> 부산공장) */}
+          <line
+            x1="295"
+            y1="69"
+            x2="375"
+            y2="69"
+            stroke="#405973"
+            strokeWidth="1.5"
+            markerEnd={`url(#arrow-default-${side})`}
+          />
+          <rect x="323" y="60" width="28" height="15" rx="3" fill="#0b1728" />
+          <text
+            x="337"
+            y="71"
+            textAnchor="middle"
+            fill="#7d96b2"
+            fontSize="9.5"
+          >
+            운영
+          </text>
+
+          {/* 3. 부산공장 노드 (x: 380, y: 48, w: 105, h: 42) */}
+          <g className={styles.svgNode}>
+            <rect
+              x="380"
+              y="48"
+              width="105"
+              height="42"
+              rx="6"
+              fill="#101c2d"
+              stroke="#273d56"
+              strokeWidth="1.2"
+            />
+            <text
+              x="432"
+              y="68"
+              textAnchor="middle"
+              fill="#e2e8f0"
+              fontSize="12"
+              fontWeight="600"
+            >
+              부산공장
+            </text>
+            <text
+              x="432"
+              y="81"
+              textAnchor="middle"
+              fill="#71869e"
+              fontSize="9"
+            >
+              제조 시설
+            </text>
+          </g>
+
+          {/* 4. 실적 메트릭 카드 */}
+          {showNewMetric ? (
+            <g
+              className={`${styles.svgNode} ${
+                isSecondSelected ? styles.svgNodeSelected : ""
+              }`}
+              onClick={() => setSelectedItemId("second")}
+            >
+              <line
+                x1="217"
+                y1="93"
+                x2="217"
+                y2="115"
+                stroke="#f59e0b"
+                strokeWidth="1.5"
+                strokeDasharray="3 3"
+              />
+              <rect
+                x="115"
+                y="115"
+                width="215"
+                height="58"
+                rx="7"
+                fill="#0d2638"
+                stroke="#2e6d8a"
+                strokeWidth="1.5"
+              />
+              <text x="127" y="132" fill="#94a7c0" fontSize="10">
+                📊 2025년 별도 매출 (실적!C3)
+              </text>
+              <text
+                x="127"
+                y="152"
+                fill="#64d1ef"
+                fontSize="15"
+                fontWeight="700"
+              >
+                120억원
+              </text>
+              {isSecondChecked && (
+                <text
+                  x="188"
+                  y="152"
+                  fill="#38bdf8"
+                  fontSize="11"
+                  fontWeight="700"
+                >
+                  (전년 대비 +20% ↑)
+                </text>
+              )}
+              <text x="127" y="165" fill="#708ea8" fontSize="9">
+                계산 산식: (120억 - 100억) / 100억 × 100
+              </text>
+            </g>
+          ) : (
+            <g opacity="0.75">
+              <line
+                x1="217"
+                y1="93"
+                x2="217"
+                y2="118"
+                stroke="#334861"
+                strokeWidth="1.2"
+                strokeDasharray="3 3"
+              />
+              <rect
+                x="125"
+                y="118"
+                width="190"
+                height="52"
+                rx="7"
+                fill="#0e1828"
+                stroke="#223348"
+                strokeWidth="1.2"
+              />
+              <text x="137" y="136" fill="#7e94ac" fontSize="10">
+                2024년 별도 매출: 100억원
+              </text>
+              <text x="137" y="154" fill="#526880" fontSize="10">
+                2025년 실적 데이터 미등록
+              </text>
+            </g>
+          )}
+
+          {/* 5. 0개 연결 원칙 안내 뱃지 */}
+          <g>
+            <rect
+              x="60"
+              y="185"
+              width="420"
+              height="24"
+              rx="5"
+              fill="rgba(14, 116, 144, 0.18)"
+              stroke="#0891b2"
+              strokeWidth="1"
+            />
+            <text
+              x="270"
+              y="201"
+              textAnchor="middle"
+              fill="#38bdf8"
+              fontSize="10.5"
+              fontWeight="700"
+            >
+              ✨ 신규 노드 0개 · 신규 간선 0개 (기존 한결정밀 노드의 수치
+              속성만 보강)
+            </text>
+          </g>
+        </svg>
+      );
+    }
+  };
+
   return (
     <div className={styles.overlay} onClick={onClose}>
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
@@ -870,7 +1953,7 @@ export function HitlReviewModal({
             role="tab"
             aria-selected={activeTab === "compare"}
           >
-            02 반영 전후 (Phase 3 준비 중)
+            02 반영 전후 (BEFORE / AFTER)
           </button>
 
           <div className={styles.tabCounts}>
@@ -907,31 +1990,93 @@ export function HitlReviewModal({
               어댑터 검토 번들 로딩 중...
             </div>
           ) : activeTab === "compare" ? (
-            <div
-              style={{
-                padding: "50px 20px",
-                textAlign: "center",
-                color: "#94a7c0",
-                background: "#0c1628",
-                borderRadius: "10px",
-                border: "1px dashed #25354e",
-              }}
-            >
-              <h3 style={{ color: "#ecf1fa", marginBottom: "8px" }}>
-                02 반영 전후 (BEFORE / AFTER) 비교 탭
-              </h3>
-              <p style={{ fontSize: "13px" }}>
-                Phase 3에서 2D SVG 경량 듀얼 다이어그램과 전년 대비 속성 비교표가
-                활성화됩니다.
-              </p>
-              <button
-                type="button"
-                className={styles.actionBtn}
-                style={{ marginTop: "14px" }}
-                onClick={() => setActiveTab("review")}
-              >
-                ← 01 근거 검토 탭으로 돌아가기
-              </button>
+            <div className={styles.compareContainer}>
+              {/* 상단 BEFORE / AFTER 듀얼 패널 */}
+              <div className={styles.panes}>
+                {/* 좌측 BEFORE 패널 */}
+                <div className={styles.pane}>
+                  <div className={styles.paneHeader}>
+                    <div className={styles.paneTitle}>
+                      <span className={styles.paneBadgeBefore}>BEFORE</span>
+                      <strong>현재 상태 (지식그래프 기준선)</strong>
+                    </div>
+                    <span className={styles.paneSub}>반영 전 원천 DB 상태</span>
+                  </div>
+                  <div className={styles.graphBox}>
+                    {renderDualGraph("before")}
+                  </div>
+                  <div className={styles.tableBox}>
+                    {renderComparisonTable("before")}
+                  </div>
+                </div>
+
+                {/* 우측 AFTER 패널 */}
+                <div className={`${styles.pane} ${styles.paneAfter}`}>
+                  <div className={styles.paneHeader}>
+                    <div className={styles.paneTitle}>
+                      <span className={styles.paneBadgeAfter}>AFTER</span>
+                      <strong>반영 예정 (선택 항목 실시간 시뮬레이션)</strong>
+                    </div>
+                    <span className={styles.paneSub}>
+                      선택 {enabledItemIds.size}개 항목 승인 시 결과
+                    </span>
+                  </div>
+                  <div className={styles.graphBox}>
+                    {renderDualGraph("after")}
+                  </div>
+                  <div className={styles.tableBox}>
+                    {renderComparisonTable("after")}
+                  </div>
+                </div>
+              </div>
+
+              {/* 중단 범례 바 */}
+              <div className={styles.legendBar}>
+                <div className={styles.legendItems}>
+                  <span className={styles.legendItem}>
+                    <span className={styles.legendDotNew} /> + 신규 노드/간선
+                  </span>
+                  <span className={styles.legendItem}>
+                    <span className={styles.legendDotChanged} /> 속성 값 보강
+                  </span>
+                  <span className={styles.legendItem}>
+                    <span className={styles.legendDotSame} /> 좌우 노드 좌표 일치 (위치 불변)
+                  </span>
+                  <span className={styles.legendItem}>
+                    <span className={styles.legendDotSafe} /> 체크 해제 시 안전하게 제외
+                  </span>
+                </div>
+                <span className={styles.legendNotice}>
+                  💡 다이어그램의 노드·간선을 클릭하면 하단에 상세 근거가 연동됩니다.
+                </span>
+              </div>
+
+              {/* 하단 후보 목록 및 근거 뷰어 (체크박스 토글 시 AFTER 다이어그램 즉시 반영) */}
+              <div className={styles.compareBottomSplit}>
+                <section className={styles.candidatePanel}>
+                  <div className={styles.panelHeader}>
+                    <h3>반영할 항목 (체크 해제 시 AFTER 다이어그램 실시간 반영)</h3>
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        color: "#94a7c0",
+                        cursor: "pointer",
+                      }}
+                      onClick={handleToggleAll}
+                    >
+                      {enabledItemIds.size > 0 ? "전체 해제" : "전체 선택"}
+                    </span>
+                  </div>
+                  {renderCandidateList()}
+                </section>
+
+                <section className={styles.evidenceViewer}>
+                  <div className={styles.panelHeader}>
+                    <h3>선택한 항목의 근거와 표시 위치</h3>
+                  </div>
+                  {renderEvidenceViewer()}
+                </section>
+              </div>
             </div>
           ) : (
             <div className={styles.splitLayout}>
@@ -950,56 +2095,7 @@ export function HitlReviewModal({
                     {enabledItemIds.size > 0 ? "전체 해제" : "전체 선택"}
                   </span>
                 </div>
-
-                <div className={styles.candidateList}>
-                  {bundleData?.rows?.map((row: CandidateRow) => {
-                    const isSelected = selectedItemId === row.id;
-                    const isChecked = enabledItemIds.has(row.id);
-                    const isBlocked = Boolean(row.blocked);
-
-                    let tagClass = styles.tagPanel;
-                    if (row.cls === "new") tagClass = styles.tagNew;
-                    if (row.cls === "note") tagClass = styles.tagNote;
-                    if (row.cls === "warn" || isBlocked)
-                      tagClass = styles.tagWarn;
-
-                    return (
-                      <div
-                        key={row.id}
-                        className={`${styles.candidateRow} ${
-                          isSelected ? styles.selectedRow : ""
-                        } ${isBlocked ? styles.blockedRow : ""}`}
-                        onClick={() => setSelectedItemId(row.id)}
-                      >
-                        <div className={styles.checkboxContainer}>
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            disabled={isBlocked}
-                            onChange={() =>
-                              handleToggleItem(row.id, isBlocked)
-                            }
-                            onClick={(e) => e.stopPropagation()}
-                            aria-label={`${row.title} 반영 여부`}
-                          />
-                        </div>
-                        <div className={styles.candidateContent}>
-                          <div className={styles.candidateTitle}>
-                            {row.title}
-                          </div>
-                          <div className={styles.candidateMeta}>
-                            <span className={`${styles.tag} ${tagClass}`}>
-                              {row.kind}
-                            </span>
-                            <span className={styles.candidateSub}>
-                              {row.sub}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                {renderCandidateList()}
               </section>
 
               {/* 우측 공통 근거 뷰어 */}

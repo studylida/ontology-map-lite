@@ -802,3 +802,271 @@
     transform: translate(-50%, 0);
   }
 }
+
+/* ========================================================
+   Phase 3: 02 반영 전후 (BEFORE / AFTER) 비교 탭 전용 스타일
+   ======================================================== */
+
+.compareContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.compareContainer::-webkit-scrollbar {
+  width: 6px;
+}
+
+.compareContainer::-webkit-scrollbar-thumb {
+  background: #253852;
+  border-radius: 4px;
+}
+
+/* 상단 듀얼 패널 2열 그리드 */
+.panes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  flex-shrink: 0;
+}
+
+.pane {
+  border: 1px solid #25354e;
+  border-radius: 10px;
+  background: #0c1628;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+.pane.paneAfter {
+  border-color: #2b546e;
+  background: #0a172c;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+}
+
+.paneHeader {
+  padding: 8px 14px;
+  background: #101b2d;
+  border-bottom: 1px solid #1c2b42;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.pane.paneAfter .paneHeader {
+  background: #12283e;
+  border-bottom-color: #244662;
+}
+
+.paneTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.paneBadgeBefore {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: #1e2c3e;
+  color: #94a7c0;
+  border: 1px solid #364860;
+  letter-spacing: 0.5px;
+}
+
+.paneBadgeAfter {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: #143e54;
+  color: #64d1ef;
+  border: 1px solid #337494;
+  letter-spacing: 0.5px;
+}
+
+.paneSub {
+  font-size: 11px;
+  color: #8fa5bf;
+}
+
+/* 2D SVG 다이어그램 캔버스 영역 */
+.graphBox {
+  position: relative;
+  background: radial-gradient(circle at center, #111e33 0%, #091222 100%);
+  border-bottom: 1px solid #1c2b42;
+  padding: 6px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 220px;
+  user-select: none;
+}
+
+.graphSvg {
+  width: 100%;
+  height: 220px;
+  overflow: visible;
+}
+
+.svgNode {
+  cursor: pointer;
+  transition: transform 0.15s ease, filter 0.15s ease;
+}
+
+.svgNode:hover {
+  filter: drop-shadow(0 0 8px rgba(100, 209, 239, 0.45));
+}
+
+.svgNodeSelected {
+  filter: drop-shadow(0 0 10px #64d1ef) !important;
+}
+
+.svgEdge {
+  cursor: pointer;
+  transition: stroke 0.15s ease, filter 0.15s ease;
+}
+
+.svgEdge:hover {
+  stroke: #64d1ef !important;
+  filter: drop-shadow(0 0 6px rgba(100, 209, 239, 0.6));
+}
+
+/* 속성 비교표 박스 */
+.tableBox {
+  padding: 8px 14px;
+  background: #0e182a;
+  display: flex;
+  flex-direction: column;
+}
+
+.pane.paneAfter .tableBox {
+  background: #0c1b30;
+}
+
+.compareTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11.5px;
+}
+
+.compareTable th {
+  text-align: left;
+  color: #7b93ae;
+  font-weight: 600;
+  padding: 5px 8px;
+  border-bottom: 1px solid #1c2b42;
+  width: 115px;
+  vertical-align: middle;
+}
+
+.compareTable td {
+  padding: 5px 8px;
+  border-bottom: 1px solid #162438;
+  color: #d1dceb;
+  vertical-align: middle;
+}
+
+.compareTable tr:last-child th,
+.compareTable tr:last-child td {
+  border-bottom: none;
+}
+
+.compareRowChanged td {
+  color: #64d1ef !important;
+  font-weight: 600;
+  background: rgba(100, 209, 239, 0.07);
+}
+
+.compareRowPending td {
+  color: #f59e0b !important;
+  font-weight: 600;
+  background: rgba(245, 158, 11, 0.07);
+}
+
+.compareRowProtected td {
+  color: #c084fc !important;
+  font-weight: 600;
+  background: rgba(192, 132, 252, 0.07);
+}
+
+/* 중단 범례 바 */
+.legendBar {
+  flex-shrink: 0;
+  background: #0c1628;
+  border: 1px solid #1e2f47;
+  border-radius: 8px;
+  padding: 6px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 11.5px;
+}
+
+.legendItems {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #94a7c0;
+}
+
+.legendDotNew {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #64d1ef;
+  box-shadow: 0 0 6px #64d1ef;
+}
+
+.legendDotChanged {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #f59e0b;
+  box-shadow: 0 0 6px #f59e0b;
+}
+
+.legendDotSame {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #59708d;
+}
+
+.legendDotSafe {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10b981;
+}
+
+.legendNotice {
+  color: #64d1ef;
+  font-size: 11px;
+}
+
+/* 하단 스플릿 레이아웃 (후보 목록 + 원천 근거 뷰어) */
+.compareBottomSplit {
+  display: grid;
+  grid-template-columns: 440px 1fr;
+  gap: 12px;
+  min-height: 250px;
+  max-height: 340px;
+}
+
