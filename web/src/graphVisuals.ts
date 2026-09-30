@@ -65,6 +65,7 @@ export type NodeVisual = THREE.Group & {
     label: CSS2DObject;
     radius: number;
     style: NodeStyle;
+    isFilteredOut?: boolean;
   };
 };
 
@@ -80,62 +81,63 @@ export type LinkVisual = THREE.Group & {
     changedAt: number;
     endpoints?: number[];
     arrow?: THREE.Mesh<THREE.ConeGeometry, THREE.MeshBasicMaterial>;
+    isFilteredOut?: boolean;
   };
 };
 
 // 레거시 8대 온톨로지 고유 컬러 팔레트 (한국어 & 영문 코드 공용 매핑)
 export const colors: Record<string, string> = {
-  COMPANY: "#b792f4", // 연보라 (기업)
-  PERSON: "#f5a24b", // 주황 (인물)
-  TECH: "#43c6d9", // 청록 (기술)
-  PROJECT: "#65c98b", // 녹색 (프로젝트)
-  PROGRAM: "#65c98b", // 녹색 (지원사업)
-  TOPIC: "#65c98b", // 녹색 (주제)
-  AGENCY: "#f17c9e", // 핑크 (기관)
-  ORGANIZATION: "#f17c9e", // 핑크 (주관기관)
-  FACILITY: "#38bdf8", // 스카이블루 (생산시설/공장)
-  METRIC: "#facc15", // 골드 노랑 (지표)
-  GENERAL: "#8fa1b8", // 기본 슬레이트
-  회사: "#b792f4",
-  기업: "#b792f4",
-  인물: "#f5a24b",
-  사람: "#f5a24b",
-  기술: "#43c6d9",
-  프로젝트: "#65c98b",
-  사업: "#65c98b",
-  "지원 사업": "#65c98b",
-  주제: "#65c98b",
-  기관: "#f17c9e",
-  "주관 기관": "#f17c9e",
-  "지원 기관": "#f17c9e",
-  시설: "#38bdf8",
-  "생산 시설": "#38bdf8",
+  COMPANY: "#b085f5", // 선명하고 풍부한 보라 (기업)
+  PERSON: "#fb923c", // 선명한 주황 (인물)
+  TECH: "#22d3ee", // 생생한 청록/사이언 (기술)
+  PROJECT: "#4ade80", // 비비드 에메랄드 그린 (프로젝트)
+  PROGRAM: "#34d399", // 산뜻한 민트 (지원사업)
+  TOPIC: "#38bdf8", // 밝은 스카이블루 (주제)
+  AGENCY: "#f472b6", // 비비드 로즈 핑크 (기관)
+  ORGANIZATION: "#f472b6", // 비비드 로즈 핑크 (주관기관)
+  FACILITY: "#60a5fa", // 선명한 코발트 블루 (생산시설/공장)
+  METRIC: "#facc15", // 골드 옐로우 (지표)
+  GENERAL: "#94a3b8", // 기본 슬레이트
+  회사: "#b085f5",
+  기업: "#b085f5",
+  인물: "#fb923c",
+  사람: "#fb923c",
+  기술: "#22d3ee",
+  프로젝트: "#4ade80",
+  사업: "#34d399",
+  "지원 사업": "#34d399",
+  주제: "#38bdf8",
+  기관: "#f472b6",
+  "주관 기관": "#f472b6",
+  "지원 기관": "#f472b6",
+  시설: "#60a5fa",
+  "생산 시설": "#60a5fa",
   지표: "#facc15",
-  사건: "#f17c9e",
+  사건: "#f472b6",
 };
 
 export function getColorForNode(node: RuntimeNode): string {
-  return colors[node.kindCode] ?? colors[node.kind] ?? "#8fa1b8";
+  return colors[node.kindCode] ?? colors[node.kind] ?? "#94a3b8";
 }
 
 export const nodeStyles: Record<LegacyTier, NodeStyle> = {
   center: {
     opacity: 1,
-    emission: 1.2,
+    emission: 1.15,
     haloOpacity: 0,
     haloFactor: 4,
-    shellOpacity: 0.6,
+    shellOpacity: 0.5,
     labelOpacity: 1,
     colorScale: 0.95,
   },
   direct: {
-    opacity: 0.95,
-    emission: 1.0,
+    opacity: 0.98,
+    emission: 1.05,
     haloOpacity: 0,
     haloFactor: 3.5,
-    shellOpacity: 0,
-    labelOpacity: 0.95,
-    colorScale: 0.9,
+    shellOpacity: 0.45,
+    labelOpacity: 0.98,
+    colorScale: 0.95,
   },
   twoHop: {
     opacity: 0.85,
@@ -156,40 +158,45 @@ export const nodeStyles: Record<LegacyTier, NodeStyle> = {
     colorScale: 0.75,
   },
   ambient: {
-    opacity: 0.88,
-    emission: 1.05,
+    opacity: 0.90,
+    emission: 1.1,
     haloOpacity: 0,
     haloFactor: 2.5,
     shellOpacity: 0,
-    labelOpacity: 0.85, // 평상시에도 외곽 섬노드 이름을 선명하게 식별 가능 (호버 시 1.0)
+    labelOpacity: 0.88, // 외곽 노드도 선명하게 식별
     colorScale: 0.95,
   },
 };
 
 export const relationOpacity: Record<LegacyTier, number> = {
-  center: 0.85,
-  direct: 0.85,
-  twoHop: 0.45,
-  threeHop: 0.28,
-  ambient: 0.15,
+  center: 0.98,
+  direct: 0.92, // 1-hop 간선: 높은 불투명도로 아주 선명함
+  twoHop: 0.38, // 2-hop 간선은 부드럽게 톤다운
+  threeHop: 0.22,
+  ambient: 0.12,
 };
 
 export function getBaseLinkOpacity(link: RuntimeLink): number {
   if (link.isCrossLink) {
-    return 0.22; // 1-hop 노드 간 상호 연결선: 가독성을 위해 은은하게 톤다운
+    return 0.14; // 1-hop 노드 간 횡단 연결선: 주 간선에 방해되지 않도록 매우 은은하게
   }
   if (link.isCenterBackbone) {
-    return 0.88; // 중심 노드와 1-hop 간 주 간선: 선명하게 강조
+    return 0.98; // 중심 노드 <-> 1-hop 주 간선: 최상위 핵심 연결선으로 압도적 선명도!
   }
-  return relationOpacity[link.tier] ?? 0.45;
+  if (link.tier === "direct") {
+    return 0.88;
+  }
+  return relationOpacity[link.tier] ?? 0.38;
 }
 
 export function getLinkColor(link: RuntimeLink): string {
-  if (link.conflict) return "#f26d78";
-  if (link.isCrossLink) return "#475569"; // 1-hop 상호 간선: 차분한 어두운 슬레이트
-  if (link.isCenterBackbone) return "#72a7ff"; // 중심 주 간선: 밝고 선명한 블루
-  if (link.tier === "ambient") return "#334155";
-  return "#5b8cd6"; // 일반 계층 간선
+  if (link.conflict) return "#f43f5e";
+  if (link.isCrossLink) return "#2d3748"; // 횡단 연결: 어두운 슬레이트
+  if (link.isCenterBackbone) return "#38bdf8"; // 중심-1hop 주 간선: 강렬한 네온 사이언/스카이블루로 즉시 구별!
+  if (link.tier === "direct") return "#60a5fa"; // 1-hop 계층 간선: 선명한 코발트 블루
+  if (link.tier === "twoHop") return "#334155"; // 2-hop 간선: 부드러운 다크 그레이
+  if (link.tier === "ambient") return "#1e293b";
+  return "#334155";
 }
 
 export function mapTier(
@@ -233,6 +240,7 @@ export function applyNodeVisual(
   node: RuntimeNode,
   radius: number,
   style: NodeStyle,
+  isFilteredOut: boolean = false,
 ) {
   const isAmbient = node.tier === "ambient";
   const entityColor = new THREE.Color(getColorForNode(node));
@@ -240,38 +248,48 @@ export function applyNodeVisual(
   const hoverOpacity = visual.userData.hoverOpacity ?? 0;
   const effectiveReveal = Math.max(hoverOpacity, proximity);
 
-  // 앰비언트 노드도 원래의 고유 분류 색상(기업 보라, 시설 하늘, 사업 민트 등)을 선명하게 유지
   const displayColor = entityColor;
+  visual.userData.isFilteredOut = isFilteredOut;
 
-  visual.userData.surface.material.color.set(0x000000);
+  // 표면 색상: 노드 고유 색상으로 풍부하게 채색 (백색 스펙큘러로 바래지 않음)
+  visual.userData.surface.material.color.copy(displayColor);
   visual.userData.surface.material.emissive.copy(displayColor);
-  visual.userData.surface.material.emissiveIntensity = isAmbient
-    ? 0.92 + effectiveReveal * 0.35
-    : style.emission;
-  visual.userData.surface.material.opacity = isAmbient
-    ? 0.82 + effectiveReveal * 0.18
-    : style.opacity;
+  visual.userData.surface.material.emissiveIntensity = isFilteredOut
+    ? 0.10
+    : isAmbient
+      ? 0.85 + effectiveReveal * 0.35
+      : style.emission * 0.75;
+  visual.userData.surface.material.opacity = isFilteredOut
+    ? 0.10
+    : isAmbient
+      ? 0.85 + effectiveReveal * 0.15
+      : style.opacity;
   visual.userData.surface.scale.setScalar(radius);
 
+  // 쉘 색상: 노드 고유 색상과 일치 (백색 묻힘 완전 해결)
+  visual.userData.shell.material.color.copy(displayColor);
+  const shellOpacity = isFilteredOut
+    ? 0
+    : Math.max(effectiveReveal * 0.6, style.shellOpacity * 0.5);
+  visual.userData.shell.material.opacity = shellOpacity;
+  visual.userData.shell.visible = shellOpacity > 0.01;
+  visual.userData.shell.scale.setScalar(
+    radius * (1.15 + effectiveReveal * 0.18),
+  );
+
   visual.userData.occluder.scale.setScalar(radius * 1.05);
-  // 외곽 앰비언트 노드는 뒷면 occluder를 비활성화하여 광채가 검은 배경에 묻히지 않게 함
-  visual.userData.occluder.visible = !isAmbient && visual.userData.surface.material.opacity > 0.05;
+  visual.userData.occluder.visible = !isFilteredOut && !isAmbient && visual.userData.surface.material.opacity > 0.05;
 
   visual.userData.core.visible = false;
   visual.userData.halo.visible = false;
 
-  const shellOpacity = Math.max(
-    effectiveReveal * 0.8,
-    style.shellOpacity,
-  );
-  visual.userData.shell.material.opacity = shellOpacity;
-  visual.userData.shell.visible = shellOpacity > 0.01;
-  visual.userData.shell.scale.setScalar(
-    radius * (1.15 + effectiveReveal * 0.2),
-  );
-
   const isHoveredOrActive = effectiveReveal > 0.05;
-  const labelOpacity = isHoveredOrActive ? 1.0 : style.labelOpacity;
+  let labelOpacity: number;
+  if (isFilteredOut) {
+    labelOpacity = isHoveredOrActive ? 0.75 : 0;
+  } else {
+    labelOpacity = isHoveredOrActive ? 1.0 : style.labelOpacity;
+  }
 
   visual.userData.label.element.style.opacity = String(labelOpacity);
   visual.userData.label.element.style.pointerEvents = labelOpacity > 0.05 ? "auto" : "none";
@@ -313,11 +331,11 @@ export function makeNodeVisual(node: RuntimeNode): NodeVisual {
   const surface = new THREE.Mesh(
     geometry,
     new THREE.MeshStandardMaterial({
-      color: 0x000000,
+      color,
       emissive: color,
-      emissiveIntensity: 1.0,
-      roughness: 0.24,
-      metalness: 0.04,
+      emissiveIntensity: 0.75,
+      roughness: 0.32,
+      metalness: 0.06,
       transparent: true,
       depthTest: false,
       depthWrite: false,
@@ -347,7 +365,7 @@ export function makeNodeVisual(node: RuntimeNode): NodeVisual {
   const shell = new THREE.Mesh(
     geometry,
     new THREE.MeshBasicMaterial({
-      color: "#e6f0ff",
+      color,
       transparent: true,
       side: THREE.BackSide,
       blending: THREE.NormalBlending,
@@ -474,7 +492,7 @@ export function makeLinkVisual(link: RuntimeLink): LinkVisual {
       new THREE.BufferGeometry().setFromPoints([]),
       material,
     );
-    line.renderOrder = 1;
+    line.renderOrder = link.isCenterBackbone ? 5 : 1;
     line.frustumCulled = false;
     const raycast = line.raycast.bind(line);
     line.raycast = (raycaster, hits) => {
@@ -497,8 +515,10 @@ export function makeLinkVisual(link: RuntimeLink): LinkVisual {
   };
 
   if (link.directionality === "DIRECTED") {
+    const coneRadius = link.isCenterBackbone ? 1.6 : 1.1;
+    const coneHeight = link.isCenterBackbone ? 5.5 : 4.2;
     const arrow = new THREE.Mesh(
-      new THREE.ConeGeometry(1.2, 4.5, 8),
+      new THREE.ConeGeometry(coneRadius, coneHeight, 8),
       new THREE.MeshBasicMaterial({
         color: lineColor,
         transparent: true,
@@ -506,6 +526,7 @@ export function makeLinkVisual(link: RuntimeLink): LinkVisual {
         depthWrite: false,
       }),
     );
+    arrow.renderOrder = link.isCenterBackbone ? 6 : 2;
     arrow.raycast = () => {};
     group.add(arrow);
     group.userData.arrow = arrow;

@@ -37,7 +37,7 @@ import {
 import { watchBoundaryPan } from "./peripheralPan";
 import { placePreviewLabels } from "./previewLabels";
 import { samplePreviewMotion } from "./previewMotion";
-import type { GraphEdge, GraphNode } from "./types";
+import type { GraphEdge, GraphFilterState, GraphNode } from "./types";
 import { useGraphIntroAnimation } from "./useGraphIntroAnimation";
 import {
   bindPointerInteraction,
@@ -62,6 +62,43 @@ interface GraphCanvasProps {
   onPanBoundary?: () => void;
   onReady?: () => void;
   introStarted?: boolean;
+  filterState?: GraphFilterState;
+}
+
+function isNodeMatchingFilter(
+  node: RuntimeNode,
+  filterState?: GraphFilterState,
+): boolean {
+  if (!filterState) return true;
+
+  // 1. 노드 유형(Classification) 필터 검사
+  if (filterState.selectedTypes && filterState.selectedTypes.size > 0) {
+    const code = (node.kindCode || "").toUpperCase();
+    const kind = (node.kind || "").toUpperCase();
+    const name = (node.originalNode.classification_name || "").toUpperCase();
+    let matched = false;
+    for (const t of filterState.selectedTypes) {
+      const up = t.toUpperCase();
+      if (code === up || kind === up || name.includes(up)) {
+        matched = true;
+        break;
+      }
+    }
+    if (!matched) return false;
+  }
+
+  // 2. 기간(Date Range) 필터 검사
+  if (filterState.datePreset !== "ALL" && filterState.startDate && filterState.endDate) {
+    const rawDate = node.originalNode.created_at;
+    if (rawDate) {
+      const nodeDate = rawDate.slice(0, 10);
+      if (nodeDate < filterState.startDate || nodeDate > filterState.endDate) {
+        return false;
+      }
+    }
+  }
+
+  return true;
 }
 
 export function GraphCanvas({
@@ -74,6 +111,7 @@ export function GraphCanvas({
   onPanBoundary,
   onReady,
   introStarted = false,
+  filterState,
 }: GraphCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const graphRef = useRef<ForceGraph3DInstance<
@@ -363,6 +401,10 @@ export function GraphCanvas({
 
     // 피그마/구글맵 스타일 OrbitControls
     const controls = graph.controls() as OrbitControls;
+    const camera = graph.camera() as THREE.PerspectiveCamera;
+    camera.far = 25000;
+    camera.updateProjectionMatrix();
+
     controls.enableRotate = false;
     controls.enablePan = true;
     controls.mouseButtons.LEFT = THREE.MOUSE.PAN;
@@ -370,7 +412,7 @@ export function GraphCanvas({
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
     controls.minDistance = 95;
-    controls.maxDistance = 2400;
+    controls.maxDistance = 9000;
 
     // Raycaster 기반 정밀 노드/라벨 클릭 판정 리스너 바인딩
     const unbindPointer = bindPointerInteraction({
@@ -632,7 +674,8 @@ export function GraphCanvas({
         const visual = nodeVisualsRef.current.get(id);
         if (!visual) continue;
         visual.position.set(node.x ?? 0, node.y ?? 0, node.z ?? 0);
-        applyNodeVisual(visual, node, radiusFor(node), nodeStyles[node.tier]);
+        const isMatch = isNodeMatchingFilter(node, filterState);
+        applyNodeVisual(visual, node, radiusFor(node), nodeStyles[node.tier], !isMatch);
       }
 
       alignLinks(
@@ -645,11 +688,20 @@ export function GraphCanvas({
       for (const [id, link] of linksRef.current) {
         const visual = linkVisualsRef.current.get(id);
         if (!visual) continue;
+        const sId = endpointId(link.source);
+        const tId = endpointId(link.target);
+        const sNode = nodesRef.current.get(sId);
+        const tNode = nodesRef.current.get(tId);
+        const sMatch = sNode ? isNodeMatchingFilter(sNode, filterState) : true;
+        const tMatch = tNode ? isNodeMatchingFilter(tNode, filterState) : true;
+        const isLinkFiltered = !sMatch || !tMatch;
+
         const transitionDampen =
           move && centerChanged
             ? 0.35 + 0.65 * (progress > 0.8 ? (progress - 0.8) * 5 : 0)
             : 1;
-        visual.userData.opacity = getBaseLinkOpacity(link) * transitionDampen;
+        const baseOpacity = getBaseLinkOpacity(link) * transitionDampen;
+        visual.userData.opacity = isLinkFiltered ? baseOpacity * 0.12 : baseOpacity;
         const expanded =
           link.isCenterBackbone ||
           (!link.isCrossLink && link.tier === "direct");
@@ -675,13 +727,14 @@ export function GraphCanvas({
         const distance = fitDistance();
         if (distance === undefined) return;
         const camera = graph.camera() as THREE.PerspectiveCamera;
+        camera.far = 25000;
+        camera.updateProjectionMatrix();
         const controls = graph.controls() as OrbitControls;
         const reducedMotion = window.matchMedia(
           "(prefers-reduced-motion: reduce)",
         ).matches;
-        const startDistance = reducedMotion
-          ? distance
-          : Math.min(controls.maxDistance, (distance * 3) / 0.95);
+        // z=8000 극원거리(한 점)에서 버벅임 없이 시작
+        const startDistance = reducedMotion ? distance : 8000;
         controls.target.set(0, 0, 0);
         camera.position.set(0, 0, startDistance);
         controls.update();
@@ -754,7 +807,42 @@ export function GraphCanvas({
     fitCamera,
     fitDistance,
     cancelIntro,
+    filterState,
   ]);
+
+  // 필터 상태(유형/기간) 변경 시 노드 및 간선 가시성(10% 반투명 딤드) 즉각 반응
+  useEffect(() => {
+    if (!readyRef.current) return;
+    for (const [id, node] of nodesRef.current) {
+      const visual = nodeVisualsRef.current.get(id);
+      if (!visual) continue;
+      const isMatch = isNodeMatchingFilter(node, filterState);
+      applyNodeVisual(visual, node, radiusFor(node), nodeStyles[node.tier], !isMatch);
+    }
+    for (const [id, link] of linksRef.current) {
+      const visual = linkVisualsRef.current.get(id);
+      if (!visual) continue;
+      const sId = endpointId(link.source);
+      const tId = endpointId(link.target);
+      const sNode = nodesRef.current.get(sId);
+      const tNode = nodesRef.current.get(tId);
+      const sMatch = sNode ? isNodeMatchingFilter(sNode, filterState) : true;
+      const tMatch = tNode ? isNodeMatchingFilter(tNode, filterState) : true;
+      const isLinkFiltered = !sMatch || !tMatch;
+      const baseOpacity = getBaseLinkOpacity(link);
+      visual.userData.opacity = isLinkFiltered ? baseOpacity * 0.12 : baseOpacity;
+      const expanded =
+        link.isCenterBackbone ||
+        (!link.isCrossLink && link.tier === "direct");
+      paintLinkOpacity(visual, visual.userData.reveal, expanded);
+    }
+    alignLinks(
+      linksRef.current,
+      linkVisualsRef.current,
+      nodeVisualsRef.current,
+      nodesRef.current,
+    );
+  }, [filterState]);
 
   return (
     <section className={styles.map} aria-label="3D 온톨로지 지식맵">

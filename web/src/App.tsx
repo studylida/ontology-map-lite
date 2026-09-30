@@ -8,10 +8,12 @@ import { KnowledgePopover } from "./KnowledgePopover";
 import { IngestionQueueNotice } from "./IngestionQueueNotice";
 import { KnowledgeIngestionModal } from "./KnowledgeIngestionModal";
 import { HitlReviewModal } from "./HitlReviewModal";
+import { FilterBar } from "./FilterBar";
 import { useInitialLoading } from "./useInitialLoading";
 import type {
   ExtractionTaskSummary,
   GraphEdge,
+  GraphFilterState,
   GraphNode,
   NodeSearchItem,
 } from "./types";
@@ -28,6 +30,14 @@ export function App() {
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+
+  // 1.5. 온톨로지 유형 & 기간 필터 상태
+  const [filterState, setFilterState] = useState<GraphFilterState>({
+    selectedTypes: new Set<string>(),
+    datePreset: "ALL",
+    startDate: null,
+    endDate: null,
+  });
 
   // 2. 비동기 대기열 & 모달 상태
   const [tasks, setTasks] = useState<ExtractionTaskSummary[]>([]);
@@ -316,6 +326,11 @@ export function App() {
         />
       </header>
 
+      {/* 온톨로지 유형 & 기간 슬림 필터 바 */}
+      <FilterBar
+        filterState={filterState}
+        onChangeFilter={setFilterState}
+      />
 
       {/* 메인 뷰: 전체 화면 3D 캔버스 */}
       <main className={styles.mainCanvas}>
@@ -341,6 +356,7 @@ export function App() {
           onPanBoundary={handlePanBoundary}
           onReady={() => setGraphReady(true)}
           introStarted={introStarted}
+          filterState={filterState}
         />
       </main>
 

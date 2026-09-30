@@ -1,0 +1,208 @@
+.filterBar {
+  position: absolute;
+  top: 76px;
+  left: 16px;
+  z-index: 45;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 14px;
+  background: rgba(18, 24, 38, 0.85);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  font-family: inherit;
+  font-size: 12px;
+  user-select: none;
+  max-width: calc(100vw - 32px);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.filterBar::-webkit-scrollbar {
+  display: none;
+}
+
+.filterGroup {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.groupLabel {
+  color: #94a3b8;
+  font-weight: 600;
+  margin-right: 4px;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #cbd5e1;
+  font-size: 11.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.16s ease;
+  white-space: nowrap;
+}
+
+.chip:hover {
+  background: rgba(255, 255, 255, 0.09);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.activeChip {
+  background: rgba(56, 189, 248, 0.18) !important;
+  border-color: #38bdf8 !important;
+  color: #38bdf8 !important;
+  font-weight: 600;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.25);
+}
+
+.colorDot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.divider {
+  width: 1px;
+  height: 18px;
+  background: rgba(255, 255, 255, 0.12);
+  flex-shrink: 0;
+}
+
+.customDateWrapper {
+  position: relative;
+}
+
+.calendarPopover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 60;
+  width: 290px;
+  padding: 14px 16px;
+  background: #151921;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.popoverHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #e2e8f0;
+  font-size: 12px;
+}
+
+.closeBtn {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.closeBtn:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.dateInputs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dateInputs label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: #94a3b8;
+  flex: 1;
+}
+
+.dateInputs input[type="date"] {
+  background: #0f1319;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  color: #f1f5f9;
+  font-size: 11px;
+  padding: 5px 6px;
+  outline: none;
+  font-family: inherit;
+}
+
+.dateInputs input[type="date"]:focus {
+  border-color: #38bdf8;
+}
+
+.dateWave {
+  color: #64748b;
+  margin-top: 16px;
+}
+
+.popoverActions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.applyBtn {
+  background: #0284c7;
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  padding: 5px 14px;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.applyBtn:hover {
+  background: #0369a1;
+}
+
+.resetBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  color: #fca5a5;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  margin-left: auto;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.resetBtn:hover {
+  background: rgba(239, 68, 68, 0.22);
+  border-color: #ef4444;
+  color: #ffffff;
+}

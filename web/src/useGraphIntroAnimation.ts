@@ -30,11 +30,16 @@ export function useGraphIntroAnimation({
       cancelAnimationFrame(introAnimRef.current);
       introAnimRef.current = null;
     }
+    const graph = graphRef.current;
+    if (graph) {
+      const controls = graph.controls() as OrbitControls;
+      if (controls) controls.maxDistance = 2500;
+    }
     const labels = containerRef.current?.querySelector<HTMLElement>(
       '[data-graph-labels="true"]',
     );
     if (labels) labels.style.opacity = "1";
-  }, [containerRef, readyRef]);
+  }, [containerRef, readyRef, graphRef]);
 
   useEffect(() => {
     if (!introStarted || introCompletedRef.current) return;
@@ -50,15 +55,16 @@ export function useGraphIntroAnimation({
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       camera.position.set(0, 0, centerZ);
       controls.target.set(0, 0, 0);
+      controls.maxDistance = 2500;
       controls.update();
       cancelIntro();
       return;
     }
 
-    // 1단계 시작: 전체 지식그래프가 한 점으로 보일 만큼 축소된 원거리 (farZ = 2400)
-    const farZ = Math.max(2200, controls.maxDistance ?? 2400);
+    // 1단계 시작: 전체 지식그래프가 밤하늘의 진짜 한 점(별빛)으로 보일 만큼 축소된 원거리 (farZ = 8000)
+    const farZ = 8000;
     // 2단계 목표: 지식맵 전체를 조망할 수 있는 개요 거리 (overviewZ)
-    const overviewZ = fitDistance(true) ?? Math.min(farZ * 0.5, (centerZ * 1.5) / 0.95);
+    const overviewZ = fitDistance(true) ?? Math.min(2200, (centerZ * 1.5) / 0.95);
 
     camera.position.set(0, 0, farZ);
     controls.target.set(0, 0, 0);
@@ -72,36 +78,37 @@ export function useGraphIntroAnimation({
     const interpolate = (from: number, to: number, t: number) =>
       Math.exp(Math.log(from) + (Math.log(to) - Math.log(from)) * easeInOutCubic(t));
 
-    // 전체 인트로 연출 (2200ms):
-    // Phase 1 (0 ~ 850ms): 한 점(farZ)에서 전체 개요(overviewZ)로 빠른 줌인
-    // Phase 2 (850 ~ 1350ms): 감속 호흡 구간 (overviewZ -> overviewZ * 0.93) + 라벨 부드럽게 페이드인 (0 -> 1)
-    // Phase 3 (1350 ~ 2200ms): 1-hop 상세(centerZ)로 가속 및 안착
+    // 전체 인트로 연출 (2300ms):
+    // Phase 1 (0 ~ 900ms): 한 점(z=8000)에서 전체 개요(overviewZ)로 빠른 고속 줌인
+    // Phase 2 (900 ~ 1400ms): 감속 호흡 구간 (overviewZ -> overviewZ * 0.93) + 라벨 부드럽게 페이드인 (0 -> 1)
+    // Phase 3 (1400 ~ 2300ms): 1-hop 상세(centerZ)로 가속 및 안착
     const frame = (now: number) => {
       begun ??= now;
-      const elapsed = Math.min(2200, now - begun);
+      const elapsed = Math.min(2300, now - begun);
 
-      if (elapsed < 850) {
-        const t = elapsed / 850;
+      if (elapsed < 900) {
+        const t = elapsed / 900;
         camera.position.z = interpolate(farZ, overviewZ, t);
         if (labels) labels.style.opacity = "0";
-      } else if (elapsed < 1350) {
-        const t = (elapsed - 850) / 500;
+      } else if (elapsed < 1400) {
+        const t = (elapsed - 900) / 500;
         // 아예 멈추지 않고 미세하게 줌인하는 감속 호흡 연출
         camera.position.z = interpolate(overviewZ, overviewZ * 0.93, t);
         if (labels) {
           labels.style.opacity = String(easeInOutCubic(t));
         }
       } else {
-        const t = (elapsed - 1350) / 850;
+        const t = (elapsed - 1400) / 900;
         camera.position.z = interpolate(overviewZ * 0.93, centerZ, t);
         if (labels) labels.style.opacity = "1";
       }
       controls.update();
 
-      if (elapsed < 2200) {
+      if (elapsed < 2300) {
         introAnimRef.current = requestAnimationFrame(frame);
       } else {
         camera.position.z = centerZ;
+        controls.maxDistance = 2500;
         controls.update();
         cancelIntro();
       }

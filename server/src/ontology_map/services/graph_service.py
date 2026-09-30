@@ -132,6 +132,7 @@ def get_node_subgraph(
             "relation_name": edge.relation.display_name,
             "properties": edge.properties or {},
             "tier": inv_rank.get(edge_tier_val, "DIRECT"),
+            "created_at": edge.created_at.isoformat() if edge.created_at else None,
         })
 
     node_list = [
@@ -143,6 +144,7 @@ def get_node_subgraph(
             "description": n.description,
             "properties": n.properties or {},
             "tier": visited_tiers.get(n.id, "DIRECT"),
+            "created_at": n.created_at.isoformat() if n.created_at else None,
         }
         for n in nodes_by_id.values()
     ]

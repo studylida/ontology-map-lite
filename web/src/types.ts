@@ -18,6 +18,7 @@ export interface GraphNode {
   description?: string | null;
   properties?: Record<string, unknown>;
   tier?: NodeTier;
+  created_at?: string | null;
 }
 
 export interface GraphEdge {
@@ -28,6 +29,17 @@ export interface GraphEdge {
   relation_name?: string;
   properties?: Record<string, unknown>;
   tier?: NodeTier;
+  created_at?: string | null;
+}
+
+// 온톨로지 필터 상태 (노드 유형 다중 선택 + 기간 프리셋/커스텀)
+export type DatePreset = "ALL" | "1M" | "3M" | "1Y" | "CUSTOM";
+
+export interface GraphFilterState {
+  selectedTypes: Set<string>; // empty set means "all types"
+  datePreset: DatePreset;
+  startDate: string | null; // "YYYY-MM-DD"
+  endDate: string | null; // "YYYY-MM-DD"
 }
 
 // GET /api/v1/nodes/{id}/graph 응답

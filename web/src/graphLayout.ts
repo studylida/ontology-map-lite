@@ -241,8 +241,8 @@ export function layoutTargets(
 
     // 빈 공간의 중심 각도 (예: 상단 12시/10시~2시 방향)
     const emptySectorCenter = normalizeAngle(gapStart + maxGap / 2);
-    // 빈 공간 내에서 외곽 노드들이 펼쳐질 각도 범위
-    const sectorSpan = Math.min(maxGap * 0.85, Math.PI * 1.3);
+    // 빈 공간 내에서 외곽 노드들이 펼쳐질 각도 범위를 넉넉하게 확장 (최대 260도)
+    const sectorSpan = Math.min(maxGap * 0.92, Math.PI * 1.45);
     const sectorStart = emptySectorCenter - sectorSpan / 2;
     const sectorStep = N3 > 1 ? sectorSpan / (N3 - 1) : 0;
 
@@ -273,16 +273,21 @@ export function layoutTargets(
         baseAngle =
           upAngle +
           (angleToEmpty > 0 ? pullFactor : -pullFactor) +
-          (i % 2 === 0 ? 0.12 : -0.12);
+          (i % 2 === 0 ? 0.16 : -0.16);
       } else {
-        // 독립/앰비언트 노드(새봄산업지원원, 제조데이터 실증지원 등)는 가장 큰 빈 공간(상단)에 우선 안착!
-        baseAngle = N3 > 1 ? sectorStart + i * sectorStep : emptySectorCenter;
+        // 독립/앰비언트 노드: 빈 섹터 내에서 한 줄로 뭉치지 않고 지그재그 성단(Constellation) 형태로 자연스럽게 흩뿌림
+        const scatterJitter = (i % 2 === 1 ? 0.08 : -0.08) * (N3 > 2 ? 1 : 0);
+        baseAngle = N3 > 1 ? sectorStart + i * sectorStep + scatterJitter : emptySectorCenter;
       }
 
       baseAngle = normalizeAngle(baseAngle);
       nodeAngles.set(nId, baseAngle);
 
-      const radiusStagger = R3 + (i % 2 === 1 && N3 > 2 ? 20 : 0);
+      // 다층 궤도 분산(Multi-tier orbital scattering):
+      // 노드들이 동일한 반경에 뭉쳐있지 않도록 3개 궤도(R3, R3+35, R3+70)에 유기적으로 분산
+      const depthTier = i % 3; // 0, 1, 2
+      const radiusStagger = R3 + depthTier * 36 + ((i * 17) % 21) - 10;
+
       const x = anchor.x + radiusStagger * Math.cos(baseAngle);
       const y = anchor.y + radiusStagger * Math.sin(baseAngle);
       const z = anchor.z + depthTargetForNode({ id: nId }) * depthScale;
@@ -292,10 +297,10 @@ export function layoutTargets(
 
   // -------------------------------------------------------------
   // STEP 4: 미세 충돌 완화 (Collision Relaxation)
-  // (같은 반경에서 노드 간 최소 거리가 55px 미만이면 살짝 밀어내기)
+  // (노드 간 최소 거리가 80px 미만이면 부드럽게 밀어내어 뭉침 원천 방지)
   // -------------------------------------------------------------
   const allPosList = Array.from(positions.entries()).filter(([id]) => id !== cId);
-  for (let iter = 0; iter < 12; iter++) {
+  for (let iter = 0; iter < 16; iter++) {
     for (let i = 0; i < allPosList.length; i++) {
       for (let j = i + 1; j < allPosList.length; j++) {
         const [, pA] = allPosList[i];
@@ -303,16 +308,16 @@ export function layoutTargets(
         const dx = pB.x - pA.x;
         const dy = pB.y - pA.y;
         const dist = Math.hypot(dx, dy);
-        const minDist = 60;
+        const minDist = 80;
         if (dist < minDist && dist > 0.001) {
           const overlap = (minDist - dist) * 0.5;
           const nx = (dx / dist) * overlap;
           const ny = (dy / dist) * overlap;
           // 중심으로부터의 반지름 보존을 위해 접선 방향 또는 외곽으로 분산
-          pA.x -= nx * 0.4;
-          pA.y -= ny * 0.4;
-          pB.x += nx * 0.4;
-          pB.y += ny * 0.4;
+          pA.x -= nx * 0.45;
+          pA.y -= ny * 0.45;
+          pB.x += nx * 0.45;
+          pB.y += ny * 0.45;
         }
       }
     }
