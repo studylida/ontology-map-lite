@@ -77,11 +77,12 @@ export function layoutTargets(
   const nodeAngles = new Map<string, number>();
 
   // -------------------------------------------------------------
-  // STEP 1: 1-hop 동심원 (Concentric Circle) 배치
+  // -------------------------------------------------------------
+  // STEP 1: 1-hop 동심원 (Concentric Circle) 콤팩트 배치
   // -------------------------------------------------------------
   const N1 = directNodes.length;
-  // 1-hop 노드 수에 따른 최적 반경 계산 (노드 간 최소 65px 이상 간격 확보)
-  const R1 = Math.max(200, Math.min(340, Math.round((N1 * 68) / (2 * Math.PI))));
+  // 1-hop 노드가 1~3개일 때도 광활하지 않게 145~180px의 아담하고 콤팩트한 궤도 형성
+  const R1 = Math.max(145, Math.min(250, Math.round((N1 * 56) / (2 * Math.PI))));
 
   // 이전 위치가 있는 노드는 기존 각도에 따라 정렬하여 애니메이션 교차/꼬임 방지
   directNodes.sort((a, b) => {
@@ -110,9 +111,10 @@ export function layoutTargets(
 
   // -------------------------------------------------------------
   // STEP 2: 2-hop 외곽 호(Arc) 부채꼴 배치
-  // (1-hop 영역을 침범하지 않도록 R2 = R1 + 210px 확보)
+  // (불필요한 공백을 줄이고 R2 = R1 + 120px로 단축)
   // -------------------------------------------------------------
-  const R2 = R1 + 210;
+  const hasTwoHop = twoHopNodes.length > 0;
+  const R2 = R1 + (hasTwoHop ? 120 : 80);
 
   // 2-hop 노드별 주 부모(1-hop) 노드 탐색 및 그룹화
   const twoHopByParent = new Map<string, Array<{ id: string | number; tier?: string }>>();
@@ -172,7 +174,7 @@ export function layoutTargets(
         nodeAngles.set(cIdStr, childAngle);
 
         // 자식이 3개 이상이면 지그재그(Stagger)로 반경을 살짝 교대하여 가독성 강화
-        const staggerRadius = R2 + (idx % 2 === 1 && K > 2 ? 35 : 0);
+        const staggerRadius = R2 + (idx % 2 === 1 && K > 2 ? 30 : 0);
 
         const x = anchor.x + staggerRadius * Math.cos(childAngle);
         const y = anchor.y + staggerRadius * Math.sin(childAngle);
@@ -198,9 +200,10 @@ export function layoutTargets(
   }
 
   // -------------------------------------------------------------
-  // STEP 3: 3-hop 및 외곽(Ambient) 노드 배치 (R3 = R2 + 180px)
+  // STEP 3: 3-hop 및 외곽(Ambient) 노드 스마트 가시 반경 배치
+  // (2-hop이 없을 경우 600px 밖으로 날리지 않고 R1 + 95px의 가시 궤도로 당김)
   // -------------------------------------------------------------
-  const R3 = R2 + 190;
+  const R3 = hasTwoHop ? R2 + 105 : R1 + 95;
   const N3 = outerNodes.length;
   if (N3 > 0) {
     const deltaTheta3 = (2 * Math.PI) / N3;
@@ -208,8 +211,11 @@ export function layoutTargets(
       const nId = String(node.id);
       if (nId === cId) return;
 
-      // 상위 연결된 노드의 각도가 있다면 그 주변을 따름
-      let baseAngle = startTheta1 + (i + 0.25) * deltaTheta3;
+      // 1-hop 노드가 1~3개로 적을 때, 1-hop 노드가 없는 반대편 빈 각도부터 우선 채움
+      let baseAngle = N1 <= 3
+        ? startTheta1 + Math.PI + ((i + 0.5) * (2 * Math.PI)) / N3
+        : startTheta1 + (i + 0.25) * deltaTheta3;
+
       const connectedEdge = relations.find((r) => {
         const s = String(r.source);
         const t = String(r.target);
@@ -220,7 +226,7 @@ export function layoutTargets(
 
       if (connectedEdge) {
         const upId = String(connectedEdge.source) === nId ? String(connectedEdge.target) : String(connectedEdge.source);
-        baseAngle = (nodeAngles.get(upId) ?? baseAngle) + (i % 2 === 0 ? 0.15 : -0.15);
+        baseAngle = (nodeAngles.get(upId) ?? baseAngle) + (i % 2 === 0 ? 0.2 : -0.2);
       }
 
       nodeAngles.set(nId, baseAngle);

@@ -77,9 +77,9 @@
 .nodeLabel {
   display: inline-block;
   cursor: pointer;
-  max-width: 150px;
+  max-width: 200px;
   overflow: hidden;
-  padding: 2px 6px;
+  padding: 2px 7px;
   color: #f1f5f9;
   background: rgba(15, 23, 42, 0.88);
   border: 1px solid rgba(255, 255, 255, 0.14);
@@ -87,11 +87,22 @@
   font: 500 13px / 1.35 system-ui, -apple-system, sans-serif;
   white-space: nowrap;
   text-overflow: ellipsis;
-  pointer-events: none;
+  pointer-events: auto;
   user-select: none;
   text-shadow: 0 1px 2px #070a10;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
-  transition: opacity 220ms cubic-bezier(0.16, 1, 0.3, 1), transform 220ms cubic-bezier(0.16, 1, 0.3, 1), outline-color 200ms ease, background-color 200ms ease;
+  /* transform 트랜지션 완전 배제: CSS2DRenderer의 위치 갱신과 1밀리초도 엇갈리지 않고 칼같이 동기화 */
+  transition: opacity 180ms ease, background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease, outline-color 150ms ease;
+}
+
+.nodeLabel:hover {
+  outline: 1.5px solid #38bdf8;
+  outline-offset: 2px;
+  border-color: #38bdf8;
+  color: #ffffff;
+  background: rgba(15, 23, 42, 0.98);
+  box-shadow: 0 0 16px rgba(56, 189, 248, 0.5);
+  /* translateY 등 위치 변경 속성 배제하여 호버 시 튕김/진동 원천 방지 */
 }
 
 .nodeLabel:focus-visible {
@@ -102,7 +113,7 @@
 .nodeLabel[data-tier="center"] {
   font-size: 15px;
   font-weight: 700;
-  max-width: 280px;
+  max-width: 240px;
   color: #ffffff;
   border-color: rgba(99, 102, 241, 0.8);
   background: rgba(15, 23, 42, 0.95);
@@ -110,10 +121,10 @@
 }
 
 .nodeLabel[data-focused="true"] {
-  max-width: 280px;
+  max-width: 200px;
   outline: 1px solid #38bdf8;
-  outline-offset: 3px;
-  border-radius: 3px;
+  outline-offset: 2px;
+  border-radius: 4px;
   border-color: #38bdf8;
   color: #ffffff;
   background: rgba(15, 23, 42, 0.96);

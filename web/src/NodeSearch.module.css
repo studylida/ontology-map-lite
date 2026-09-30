@@ -68,6 +68,12 @@
   background: rgba(56, 189, 248, 0.15);
 }
 
+.resultItemSelected {
+  background: rgba(56, 189, 248, 0.25);
+  border-left: 3px solid #38bdf8;
+  padding-left: 7px;
+}
+
 .itemHeader {
   display: flex;
   align-items: center;

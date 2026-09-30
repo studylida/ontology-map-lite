@@ -199,6 +199,7 @@ export function KnowledgeIngestionModal({
   const [textInput, setTextInput] = useState<string>("");
   const [titleInput, setTitleInput] = useState<string>("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [autoCommit, setAutoCommit] = useState<boolean>(false);
   const [submitting, setSubmitting] = useState<boolean>(false);
 
   // 2. HITL 검토 모드 상태
@@ -378,13 +379,14 @@ export function KnowledgeIngestionModal({
     try {
       let res: { task_id: string; status: string };
       if (activeTab === "file" && selectedFile) {
-        res = await submitExtractFileAsync(selectedFile);
+        res = await submitExtractFileAsync(selectedFile, autoCommit);
       } else if (activeTab === "url") {
         if (!urlInput.trim()) return;
         res = await submitExtractAsync({
           source_type: "url",
           content: urlInput.trim(),
           title: titleInput,
+          auto_commit: autoCommit,
         });
       } else {
         if (!textInput.trim()) return;
@@ -392,6 +394,7 @@ export function KnowledgeIngestionModal({
           source_type: "text",
           content: textInput.trim(),
           title: titleInput,
+          auto_commit: autoCommit,
         });
       }
 
@@ -469,13 +472,15 @@ export function KnowledgeIngestionModal({
 
   return (
     <div className={styles.backdrop}>
-      <div className={styles.modal}>
+      <div
+        className={`${styles.modal} ${currentMode === "review" ? styles.modalWide : ""}`}
+      >
         <header className={styles.header}>
           <h2>
             <span>✨</span>
             {currentMode === "input"
               ? "지식 인제스트 허브"
-              : "HITL 온톨로지 검토 & 적재"}
+              : "1440px 와이드 HITL 온톨로지 검토 & 적재"}
           </h2>
           <button type="button" className={styles.closeBtn} onClick={onClose}>
             ✕
@@ -683,129 +688,192 @@ export function KnowledgeIngestionModal({
                   </div>
                 </div>
               )}
+
+              {/* 자동 반영 (HITL 검토 스킵) 체크박스 */}
+              {activeTab !== "peer" && (
+                <div className={styles.autoCommitRow}>
+                  <label className={styles.checkboxLabel}>
+                    <input
+                      type="checkbox"
+                      checked={autoCommit}
+                      onChange={(e) => setAutoCommit(e.target.checked)}
+                    />
+                    <span>
+                      검토 없이 완료 즉시 지식맵에 자동 반영 (HITL 검토 건너뛰기)
+                    </span>
+                  </label>
+                </div>
+              )}
             </>
-          ) : /* HITL 검토 화면 */
+          ) : /* 1440px 와이드 HITL 검토 화면 */
           loadingReview ? (
-            <div style={{ textAlign: "center", padding: "40px" }}>
-              추출 데이터 로딩 중...
+            <div style={{ textAlign: "center", padding: "60px", color: "#38bdf8" }}>
+              ⏳ 추출 온톨로지 데이터 로딩 중...
             </div>
           ) : reviewedPayload ? (
-            <>
-              <div className={styles.summaryBox}>
-                <strong>
-                  [출처: {reviewedPayload.source_project}]{" "}
-                  {reviewedPayload.document_title}
-                </strong>
-                <div style={{ marginTop: "4px" }}>
-                  {reviewedPayload.insights?.summary ?? "요약 정보 없음"}
+            <div className={styles.reviewLayout}>
+              {/* Column 1: 원천 문서 메타데이터 & Claims */}
+              <div className={styles.reviewColMeta}>
+                <div className={styles.metaCard}>
+                  <span className={styles.sourceTag}>
+                    출처: {reviewedPayload.source_project}
+                  </span>
+                  <h3 className={styles.metaTitle}>
+                    {reviewedPayload.document_title || "문서 제목 없음"}
+                  </h3>
+                  <div className={styles.metaSummary}>
+                    <strong>AI 종합 요약</strong>
+                    <p>{reviewedPayload.insights?.summary ?? "요약 정보 없음"}</p>
+                  </div>
+                </div>
+
+                <div className={styles.claimsCard}>
+                  <div className={styles.colHeader}>
+                    <span>📄 원천 근거 (Claims)</span>
+                    <span className={styles.countBadge}>
+                      {reviewedPayload.claims?.length || 0}건
+                    </span>
+                  </div>
+                  <div className={styles.claimsList}>
+                    {reviewedPayload.claims && reviewedPayload.claims.length > 0 ? (
+                      reviewedPayload.claims.map((claim, cIdx) => (
+                        <div key={cIdx} className={styles.claimItem}>
+                          <div className={styles.claimQuote}>“{claim.quote}”</div>
+                          {claim.claim_text && claim.claim_text !== claim.quote && (
+                            <div className={styles.claimStatement}>
+                              ➔ {claim.claim_text}
+                            </div>
+                          )}
+                        </div>
+                      ))
+                    ) : (
+                      <div className={styles.emptyNote}>
+                        추출된 원천 근거가 없습니다.
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
-              <div className={styles.sectionTitle}>
-                <span>
-                  선별된 엔티티 노드 ({selectedNodeIndices.size}/
-                  {reviewedPayload.nodes.length})
-                </span>
-              </div>
-              <div className={styles.checkList}>
-                {reviewedPayload.nodes.map((node, idx) => (
-                  <div
-                    key={idx}
-                    className={`${styles.checkItem} ${selectedNodeIndices.has(idx) ? styles.checkItemActive : ""}`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedNodeIndices.has(idx)}
-                      onChange={(e) => toggleNode(idx, e.target.checked)}
-                    />
-                    <div className={styles.checkItemContent}>
-                      <input
-                        type="text"
-                        value={node.name}
-                        onChange={(e) => updateNodeName(idx, e.target.value)}
-                        className={styles.inlineEdit}
-                      />
-                      <span style={{ fontSize: "11px", color: "#94a3b8" }}>
-                        [{node.classification}] {node.description}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className={styles.sectionTitle}>
-                <span>
-                  선별된 관계 엣지 ({selectedEdgeIndices.size}/
-                  {reviewedPayload.edges.length})
-                </span>
-              </div>
-              <div className={styles.checkList}>
-                {reviewedPayload.edges.map((edge, idx) => {
-                  const missingReason = getMissingEndpointReason(
-                    edge,
-                    selectedNodeIndices,
-                    reviewedPayload.nodes,
-                  );
-                  const isEdgeValidCondition = missingReason === null;
-
-                  return (
+              {/* Column 2: 선별된 엔티티 노드 */}
+              <div className={styles.reviewColNodes}>
+                <div className={styles.colHeader}>
+                  <span>선별된 엔티티 노드</span>
+                  <span className={styles.countBadge}>
+                    {selectedNodeIndices.size} / {reviewedPayload.nodes.length}
+                  </span>
+                </div>
+                <div className={styles.colList}>
+                  {reviewedPayload.nodes.map((node, idx) => (
                     <div
                       key={idx}
-                      className={`${styles.checkItem} ${selectedEdgeIndices.has(idx) ? styles.checkItemActive : ""}`}
-                      style={{ opacity: isEdgeValidCondition ? 1 : 0.45 }}
+                      className={`${styles.checkItem} ${selectedNodeIndices.has(idx) ? styles.checkItemActive : ""}`}
                     >
                       <input
                         type="checkbox"
-                        checked={selectedEdgeIndices.has(idx) && isEdgeValidCondition}
-                        disabled={!isEdgeValidCondition}
-                        onChange={(e) => {
-                          const next = new Set(selectedEdgeIndices);
-                          e.target.checked ? next.add(idx) : next.delete(idx);
-                          setSelectedEdgeIndices(next);
-                        }}
+                        checked={selectedNodeIndices.has(idx)}
+                        onChange={(e) => toggleNode(idx, e.target.checked)}
                       />
                       <div className={styles.checkItemContent}>
-                        <span style={{ fontSize: "12px", color: "#38bdf8" }}>
-                          {edge.source_name} ➔ <strong>{edge.relation}</strong> ➔{" "}
-                          {edge.target_name}
-                        </span>
-                        {!isEdgeValidCondition && (
-                          <span style={{ fontSize: "11px", color: "#f87171", marginLeft: "8px" }}>
-                            ({missingReason})
+                        <div className={styles.nodeItemTop}>
+                          <span className={styles.classBadge}>
+                            [{node.classification}]
+                          </span>
+                          <input
+                            type="text"
+                            value={node.name}
+                            onChange={(e) => updateNodeName(idx, e.target.value)}
+                            className={styles.inlineEdit}
+                          />
+                        </div>
+                        {node.description && (
+                          <span className={styles.nodeItemDesc}>
+                            {node.description}
                           </span>
                         )}
                       </div>
                     </div>
-                  );
-                })}
+                  ))}
+                </div>
               </div>
 
-              {/* 추출된 원천 근거(Claims) 미리보기 아코디언 */}
-              {reviewedPayload.claims && reviewedPayload.claims.length > 0 && (
-                <div style={{ marginTop: "14px" }}>
-                  <details style={{ background: "rgba(15, 23, 42, 0.4)", borderRadius: "8px", padding: "10px" }}>
-                    <summary style={{ cursor: "pointer", fontSize: "12px", color: "#38bdf8", fontWeight: 600 }}>
-                      📄 원천 인용 근거 미리보기 ({reviewedPayload.claims.length}건)
-                    </summary>
-                    <div style={{ marginTop: "8px", display: "flex", flexDirection: "column", gap: "6px", maxHeight: "140px", overflowY: "auto" }}>
-                      {reviewedPayload.claims.map((claim, cIdx) => (
-                        <div key={cIdx} style={{ fontSize: "11px", color: "#cbd5e1", borderLeft: "2px solid #38bdf8", paddingLeft: "8px" }}>
-                          “{claim.quote}”
-                          {claim.claim_text && claim.claim_text !== claim.quote && (
-                            <span style={{ color: "#94a3b8", display: "block" }}>➔ {claim.claim_text}</span>
+              {/* Column 3: 선별된 관계 엣지 */}
+              <div className={styles.reviewColEdges}>
+                <div className={styles.colHeader}>
+                  <span>선별된 관계 엣지</span>
+                  <span className={styles.countBadge}>
+                    {selectedEdgeIndices.size} / {reviewedPayload.edges.length}
+                  </span>
+                </div>
+                <div className={styles.colList}>
+                  {reviewedPayload.edges.map((edge, idx) => {
+                    const missingReason = getMissingEndpointReason(
+                      edge,
+                      selectedNodeIndices,
+                      reviewedPayload.nodes,
+                    );
+                    const isEdgeValidCondition = missingReason === null;
+
+                    return (
+                      <div
+                        key={idx}
+                        className={`${styles.checkItem} ${
+                          selectedEdgeIndices.has(idx) && isEdgeValidCondition
+                            ? styles.checkItemActive
+                            : !isEdgeValidCondition
+                              ? styles.checkItemDisabled
+                              : ""
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={
+                            selectedEdgeIndices.has(idx) && isEdgeValidCondition
+                          }
+                          disabled={!isEdgeValidCondition}
+                          onChange={(e) => {
+                            const next = new Set(selectedEdgeIndices);
+                            e.target.checked ? next.add(idx) : next.delete(idx);
+                            setSelectedEdgeIndices(next);
+                          }}
+                        />
+                        <div className={styles.checkItemContent}>
+                          <div className={styles.edgeRelation}>
+                            <strong>{edge.source_name}</strong>
+                            <span className={styles.relationArrow}>
+                              —[{edge.relation || "RELATES_TO"}]➔
+                            </span>
+                            <strong>{edge.target_name}</strong>
+                          </div>
+                          {!isEdgeValidCondition && (
+                            <span className={styles.blockedBadge}>
+                              ⚠️ {missingReason}
+                            </span>
                           )}
                         </div>
-                      ))}
-                    </div>
-                  </details>
+                      </div>
+                    );
+                  })}
                 </div>
-              )}
-            </>
+              </div>
+            </div>
           ) : null}
         </div>
 
         <footer className={styles.footer}>
-          <button type="button" className={styles.cancelBtn} onClick={handleCancel}>
+          {currentMode === "review" && (
+            <div className={styles.reviewSummaryStats}>
+              <span>
+                승인 대상: 노드 <strong>{selectedNodeIndices.size}</strong>개 /{" "}
+                관계 <strong>{selectedEdgeIndices.size}</strong>개
+              </span>
+            </div>
+          )}
+          <button
+            type="button"
+            className={styles.cancelBtn}
+            onClick={handleCancel}
+          >
             {currentMode === "review" ? "이전" : "취소"}
           </button>
           {currentMode === "input" && activeTab !== "peer" && (

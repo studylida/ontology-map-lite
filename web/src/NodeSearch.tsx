@@ -18,6 +18,7 @@ export function NodeSearch({ onSelectNode }: NodeSearchProps) {
   const [keyword, setKeyword] = useState<string>("");
   const [results, setResults] = useState<MatchResult[]>([]);
   const [isOpen, setIsOpen] = useState<boolean>(false);
+  const [selectedIndex, setSelectedIndex] = useState<number>(-1);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   // [블로그 knowledgeEngine.ts 이식]: 가중치 스코어링 함수
@@ -73,29 +74,32 @@ export function NodeSearch({ onSelectNode }: NodeSearchProps) {
     if (!keyword.trim()) {
       setResults([]);
       setIsOpen(false);
+      setSelectedIndex(-1);
       return;
     }
 
-    // [빈칸 1]: 300ms 후에 searchNodes(keyword)를 호출하는 타이머를 작성하세요.
     const timer = setTimeout(async () => {
       try {
         const raw = await searchNodes(keyword);
         const scored = scoreAndRankNodes(keyword, raw);
         setResults(scored);
         setIsOpen(scored.length > 0);
+        setSelectedIndex(-1);
       } catch (err) {
         console.error("검색 실패:", err);
       }
     }, 300);
 
-    // [빈칸 2]: 다음 타이핑 시 이전 타이머를 취소(Cleanup)하는 함수를 반환하세요.
     return () => clearTimeout(timer);
   }, [keyword]);
 
   // Esc 키 및 외부 클릭 감지 (블로그 KnowledgePopover 인터랙션)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setIsOpen(false);
+      if (e.key === "Escape") {
+        setIsOpen(false);
+        setSelectedIndex(-1);
+      }
     };
     const handleClickOutside = (e: MouseEvent) => {
       if (
@@ -103,6 +107,7 @@ export function NodeSearch({ onSelectNode }: NodeSearchProps) {
         !containerRef.current.contains(e.target as Node)
       ) {
         setIsOpen(false);
+        setSelectedIndex(-1);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -113,6 +118,35 @@ export function NodeSearch({ onSelectNode }: NodeSearchProps) {
     };
   }, []);
 
+  // 키보드 방향키(↑/↓) 및 Enter 선택 핸들러
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!isOpen || results.length === 0) {
+      if (e.key === "ArrowDown" && results.length > 0) {
+        setIsOpen(true);
+        setSelectedIndex(0);
+        e.preventDefault();
+      }
+      return;
+    }
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setSelectedIndex((prev) => (prev + 1) % results.length);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setSelectedIndex((prev) => (prev <= 0 ? results.length - 1 : prev - 1));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      const targetIdx =
+        selectedIndex >= 0 && selectedIndex < results.length ? selectedIndex : 0;
+      const targetNode = results[targetIdx].node;
+      onSelectNode(targetNode);
+      setKeyword(targetNode.name);
+      setIsOpen(false);
+      setSelectedIndex(-1);
+    }
+  };
+
   return (
     <div ref={containerRef} className={styles.searchContainer}>
       <div className={styles.inputWrapper}>
@@ -122,6 +156,7 @@ export function NodeSearch({ onSelectNode }: NodeSearchProps) {
           placeholder="노드 이름, 분류, 키워드 검색..."
           value={keyword}
           onChange={(e) => setKeyword(e.target.value)}
+          onKeyDown={handleInputKeyDown}
           onFocus={() => results.length > 0 && setIsOpen(true)}
           className={styles.searchInput}
         />
@@ -129,13 +164,15 @@ export function NodeSearch({ onSelectNode }: NodeSearchProps) {
 
       {isOpen && (
         <ul className={styles.dropdown}>
-          {results.map(({ node, matchedReason }) => (
+          {results.map(({ node, matchedReason }, idx) => (
             <li
               key={node.id}
-              className={styles.resultItem}
+              className={`${styles.resultItem} ${idx === selectedIndex ? styles.resultItemSelected : ""}`}
+              onMouseEnter={() => setSelectedIndex(idx)}
               onClick={() => {
                 onSelectNode(node);
                 setIsOpen(false);
+                setSelectedIndex(-1);
                 setKeyword(node.name);
               }}
             >

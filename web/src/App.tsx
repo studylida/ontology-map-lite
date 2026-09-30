@@ -139,12 +139,37 @@ export function App() {
     initGraph();
   }, [loadGraph]);
 
+  // HITL 검토 후 지식그래프 적재 성공 시 (신규 노드 Fly-to + 사이드패널 오픈)
+  const handleIngestionSuccess = useCallback(
+    async (newNodeId?: number) => {
+      const targetId = newNodeId && newNodeId > 0 ? newNodeId : centerNodeId;
+      if (targetId) {
+        setCenterNodeId(targetId);
+        await loadGraph(targetId, false);
+        // Three.js 카메라 부드러운 포커싱 & 재배치
+        setTimeout(() => {
+          canvasRef.current?.recenter();
+        }, 150);
+      }
+    },
+    [centerNodeId, loadGraph],
+  );
+
   // 4. 비동기 대기열 폴링 (2.5초 주기)
   useEffect(() => {
     const pollTasks = async () => {
       try {
         const list = await fetchAgentTasks();
         setTasks(list);
+
+        // 사용자가 '검토 없이 완료 즉시 자동 반영'으로 의뢰한 작업이 완료되었을 시 자동 그래프 리프레시
+        const autoCommitted = list.find(
+          (t) => t.status === "completed" && t.auto_committed && t.primary_node_id,
+        );
+        if (autoCommitted && autoCommitted.primary_node_id) {
+          dismissAgentTask(autoCommitted.id).catch(() => {});
+          handleIngestionSuccess(autoCommitted.primary_node_id);
+        }
       } catch (err) {
         // 폴링 에러는 조용히 무시
       }
@@ -152,7 +177,7 @@ export function App() {
     pollTasks();
     const timer = setInterval(pollTasks, 2500);
     return () => clearInterval(timer);
-  }, []);
+  }, [handleIngestionSuccess]);
 
   // 5. 인터랙션 핸들러들
   const handleNodeClick = useCallback(
@@ -214,19 +239,6 @@ export function App() {
     }
   };
 
-  // HITL 검토 후 지식그래프 적재 성공 시 (M4.4: 중심 ID가 같아도 graph와 details를 항상 재조회 & 신규 노드 Fly-to + 사이드패널 오픈)
-  const handleIngestionSuccess = async (newNodeId?: number) => {
-    const targetId = newNodeId && newNodeId > 0 ? newNodeId : centerNodeId;
-    if (targetId) {
-      setCenterNodeId(targetId);
-      await loadGraph(targetId, false);
-      // Three.js 카메라 부드러운 포커싱 & 재배치
-      setTimeout(() => {
-        canvasRef.current?.recenter();
-      }, 150);
-    }
-  };
-
   return (
     <div className={styles.appContainer}>
       {/* 상단 네비게이션 헤더 */}
@@ -236,7 +248,7 @@ export function App() {
           <span className={styles.subText}>8 Core Tables Slim Graph</span>
         </div>
 
-        {/* 검색 컴포넌트 */}
+        {/* 검색 컴포넌트 (키보드 방향키 및 Enter 선택 지원) */}
         <NodeSearch onSelectNode={handleSelectSearchedNode} />
 
         {/* + 지식 추가 버튼 */}
@@ -246,16 +258,6 @@ export function App() {
           onClick={handleOpenInputModal}
         >
           <span>✨</span> + 지식 추가
-        </button>
-
-        {/* 1440px 와이드 HITL 자료 검토 버튼 */}
-        <button
-          type="button"
-          className={styles.hitlReviewBtn}
-          onClick={() => handleOpenHitlModal("news")}
-          title="뉴스·공고·엑셀 외부 산출물을 원천 근거와 함께 1440px 와이드 모달에서 검토합니다"
-        >
-          <span>📋</span> 자료 검토 (HITL)
         </button>
 
         {/* 전체화면 맞춤 정렬 버튼 */}
@@ -274,24 +276,6 @@ export function App() {
           onSelectTask={handleOpenReviewModal}
           onDismissTask={handleDismissTask}
         />
-
-        {/* 노드 ID 직접 입력 점프 컨트롤 */}
-        <div className={styles.quickNav}>
-          <label htmlFor="node-jump-input">중심 노드: </label>
-          <input
-            id="node-jump-input"
-            type="number"
-            min={1}
-            value={centerNodeId}
-            onChange={(e) => {
-              const val = Number.parseInt(e.target.value, 10);
-              if (!Number.isNaN(val) && val > 0) {
-                setCenterNodeId(val);
-              }
-            }}
-            className={styles.jumpInput}
-          />
-        </div>
       </header>
 
       {/* 미표시된 이웃 노드가 존재할 때 안내 배너 및 전체 펼치기 버튼 */}
@@ -314,7 +298,10 @@ export function App() {
       {/* 메인 뷰: 전체 화면 3D 캔버스 */}
       <main className={styles.mainCanvas}>
         {loading && (
-          <div className={styles.overlayMessage}>그래프 로딩 중...</div>
+          <div className={styles.miniLoadingIndicator}>
+            <span className={styles.spinner} />
+            <span>지식맵 갱신 중...</span>
+          </div>
         )}
         {error && loadingPhase === "hidden" && (
           <div className={styles.errorMessage} role="alert">

@@ -137,12 +137,17 @@ def get_top_degree_node(session: Session = Depends(open_session)):
 def get_subgraph(
     node_id: int,
     unbounded: bool = False,
-    limit: int = 60,
+    max_hops: Optional[int] = None,
+    limit: Optional[int] = None,
     session: Session = Depends(open_session),
 ):
-    """특정 노드 중심 BFS 다계층(1~4 hop) 서브그래프 조회."""
-    hop_limit = None if unbounded else limit
-    result = get_node_subgraph(session, node_id, max_hops=4, hop_limit=hop_limit)
+    """특정 노드 중심 BFS 다계층 서브그래프 조회.
+    기본 1~2 hop(35개 이내) 초고속 렌더링(10~20ms)을 수행하며,
+    경계 패닝 및 unbounded 조회 시 4 hop 전체 서브그래프를 반환합니다.
+    """
+    effective_max_hops = max_hops if max_hops is not None else (4 if unbounded else 2)
+    effective_limit = limit if limit is not None else (None if unbounded else 35)
+    result = get_node_subgraph(session, node_id, max_hops=effective_max_hops, hop_limit=effective_limit)
     if not result["nodes"]:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Node not found")
     return result
@@ -333,23 +338,24 @@ def search_nodes(
 @router.post("/agent/extract-async", status_code=status.HTTP_202_ACCEPTED)
 async def extract_knowledge_async(payload: AgentExtractJsonRequest):
     """웹 URL 또는 텍스트 메모를 비동기 대기열에 등록합니다 (202 Accepted)."""
-    # [빈칸 1]: task_queue_manager의 enqueue 메서드를 await로 호출하여 task_id를 발급받으세요.
     task_id = await task_queue_manager.enqueue(
         source_type=payload.source_type,
         raw_data=payload.content,
         filename_or_url=payload.title,
+        auto_commit=payload.auto_commit,
     )
     return {"task_id": task_id, "status": "pending"}
 
 
 @router.post("/agent/extract-async/file", status_code=status.HTTP_202_ACCEPTED)
-async def extract_file_async(file: UploadFile = File(...)):
+async def extract_file_async(file: UploadFile = File(...), auto_commit: bool = False):
     """PDF/DOCX/TXT 문서를 업로드받아 비동기 대기열에 등록합니다 (202 Accepted)."""
     file_bytes = await file.read()
     task_id = await task_queue_manager.enqueue(
         source_type="file",
         raw_data=file_bytes,
         filename_or_url=file.filename,
+        auto_commit=auto_commit,
     )
     return {"task_id": task_id, "status": "pending"}
 

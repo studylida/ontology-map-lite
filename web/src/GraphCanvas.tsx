@@ -308,6 +308,23 @@ export function GraphCanvas({
           nodeVisualsRef.current.set(strId, visual);
         }
         visual.position.set(node.x ?? 0, node.y ?? 0, node.z ?? 0);
+
+        // 이름표(Label) HTML 버튼에 호버(mouseenter/mouseleave) 및 클릭(click) 완벽 연동
+        const labelEl = visual.userData.label.element;
+        labelEl.style.pointerEvents = "auto";
+        labelEl.style.cursor = "pointer";
+        labelEl.onmouseenter = () => {
+          hoverManager.handleNodeHover(node);
+        };
+        labelEl.onmouseleave = () => {
+          hoverManager.handleNodeHover(null);
+        };
+        labelEl.onclick = (e) => {
+          e.stopPropagation();
+          cancelIntro();
+          onNodeClick(node.originalNode);
+        };
+
         return visual;
       })
       .linkThreeObject((link) => {

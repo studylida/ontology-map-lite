@@ -312,3 +312,224 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* 1440px 와이드 HITL 검토 모달 스타일 */
+.modalWide {
+  width: 1440px;
+  max-width: 96vw;
+  height: 92vh;
+  max-height: 92vh;
+}
+
+.reviewLayout {
+  display: grid;
+  grid-template-columns: 360px 1fr 1fr;
+  gap: 16px;
+  height: 100%;
+  min-height: 480px;
+}
+
+.reviewColMeta,
+.reviewColNodes,
+.reviewColEdges {
+  display: flex;
+  flex-direction: column;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 14px;
+  overflow: hidden;
+}
+
+.metaCard {
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.sourceTag {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.15);
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-bottom: 6px;
+}
+
+.metaTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: #f8fafc;
+  margin: 0 0 8px 0;
+  line-height: 1.35;
+}
+
+.metaSummary {
+  font-size: 11px;
+  color: #94a3b8;
+  line-height: 1.5;
+}
+
+.metaSummary strong {
+  color: #cbd5e1;
+  display: block;
+  margin-bottom: 2px;
+}
+
+.claimsCard {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.colHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  font-weight: 600;
+  color: #e2e8f0;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.countBadge {
+  font-size: 11px;
+  font-weight: 700;
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.12);
+  padding: 1px 6px;
+  border-radius: 10px;
+}
+
+.claimsList,
+.colList {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-right: 4px;
+}
+
+.claimItem {
+  background: rgba(0, 0, 0, 0.3);
+  border-left: 3px solid #38bdf8;
+  border-radius: 4px;
+  padding: 8px 10px;
+}
+
+.claimQuote {
+  font-size: 11px;
+  color: #cbd5e1;
+  line-height: 1.4;
+}
+
+.claimStatement {
+  font-size: 10px;
+  color: #94a3b8;
+  margin-top: 4px;
+}
+
+.nodeItemTop {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.classBadge {
+  font-size: 10px;
+  font-weight: 700;
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.15);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.nodeItemDesc {
+  font-size: 11px;
+  color: #94a3b8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.edgeRelation {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  font-size: 12px;
+  color: #f1f5f9;
+}
+
+.relationArrow {
+  font-size: 10px;
+  font-weight: 700;
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.12);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+.blockedBadge {
+  font-size: 10px;
+  color: #f87171;
+  margin-top: 3px;
+}
+
+.checkItemDisabled {
+  opacity: 0.45;
+  border-color: rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.emptyNote {
+  font-size: 12px;
+  color: #64748b;
+  text-align: center;
+  padding: 20px 0;
+}
+
+.autoCommitRow {
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+}
+
+.checkboxLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #cbd5e1;
+  cursor: pointer;
+  user-select: none;
+}
+
+.checkboxLabel input[type="checkbox"] {
+  cursor: pointer;
+  accent-color: #38bdf8;
+}
+
+.reviewSummaryStats {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-right: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.reviewSummaryStats strong {
+  color: #38bdf8;
+}

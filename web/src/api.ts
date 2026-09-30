@@ -98,6 +98,7 @@ export async function submitExtractAsync(data: {
   source_type: "url" | "text";
   content: string;
   title?: string;
+  auto_commit?: boolean;
 }): Promise<{ task_id: string; status: string }> {
   const res = await fetch(`${BASE_URL}/agent/extract-async`, {
     method: "POST",
@@ -113,11 +114,13 @@ export async function submitExtractAsync(data: {
  */
 export async function submitExtractFileAsync(
   file: File,
+  autoCommit: boolean = false,
 ): Promise<{ task_id: string; status: string }> {
   const formData = new FormData();
   formData.append("file", file);
 
-  const res = await fetch(`${BASE_URL}/agent/extract-async/file`, {
+  const query = autoCommit ? "?auto_commit=true" : "";
+  const res = await fetch(`${BASE_URL}/agent/extract-async/file${query}`, {
     method: "POST",
     body: formData,
   });

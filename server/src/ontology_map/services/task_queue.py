@@ -15,6 +15,7 @@ from ontology_map.services.document_parser import extract_document_text
 from ontology_map.services.entity_resolution import get_existing_entity_names
 from ontology_map.services.ingestion_agent import extract_ontology_from_text
 from ontology_map.services.insight_service import generate_node_insight
+from ontology_map.services.intake_service import process_intake
 
 TaskStatus = Literal["pending", "processing", "completed", "failed"]
 
@@ -27,6 +28,9 @@ class ExtractionTask:
     status: TaskStatus = "pending"
     result: Optional[IntakePayload] = None
     error: Optional[str] = None
+    auto_commit: bool = False
+    auto_committed: bool = False
+    primary_node_id: Optional[int] = None
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     completed_at: Optional[datetime] = None
 
@@ -38,6 +42,9 @@ class ExtractionTask:
             "title": self.title,
             "status": self.status,
             "error": self.error,
+            "auto_commit": self.auto_commit,
+            "auto_committed": self.auto_committed,
+            "primary_node_id": self.primary_node_id,
             "created_at": self.created_at.isoformat(),
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,
             "node_count": len(self.result.nodes) if self.result else 0,
@@ -105,6 +112,18 @@ class TaskQueueManager:
                 )
 
                 task.result = payload
+
+                # 자동 반영 옵션 활성화 시 즉시 DB에 적재
+                if task.auto_commit:
+                    try:
+                        with Session(get_engine()) as session:
+                            intake_res = process_intake(session, payload)
+                            session.commit()
+                            task.primary_node_id = intake_res.primary_node_id
+                            task.auto_committed = True
+                    except Exception as commit_err:
+                        task.error = f"자동 적재 실패: {commit_err}"
+
                 task.status = "completed"
                 task.completed_at = datetime.now(timezone.utc)
             except Exception as exc:
@@ -119,6 +138,7 @@ class TaskQueueManager:
         source_type: str,
         raw_data: bytes | str,
         filename_or_url: Optional[str] = None,
+        auto_commit: bool = False,
     ) -> str:
         """새 추출 작업을 대기열에 등록하고 고유 Task ID를 즉시 반환합니다."""
         task_id = uuid.uuid4().hex[:12]
@@ -129,6 +149,7 @@ class TaskQueueManager:
             source_type=source_type,
             title=title_placeholder,
             status="pending",
+            auto_commit=auto_commit,
         )
         self.tasks[task_id] = task
 

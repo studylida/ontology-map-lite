@@ -63,6 +63,7 @@ class AgentExtractJsonRequest(BaseModel):
     source_type: Literal["url", "text"] = "text"
     content: str = Field(..., min_length=1)
     title: Optional[str] = None
+    auto_commit: bool = False
 
 
 class NodeClaimItem(BaseModel):

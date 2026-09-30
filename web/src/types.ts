@@ -162,6 +162,9 @@ export interface ExtractionTaskSummary {
   title: string;
   status: TaskStatus;
   error: string | null;
+  auto_commit?: boolean;
+  auto_committed?: boolean;
+  primary_node_id?: number | null;
   created_at: string;
   completed_at: string | null;
   node_count: number;
