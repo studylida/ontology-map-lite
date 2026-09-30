@@ -1,5 +1,5 @@
 // web/src/HitlReviewModal.tsx
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { commitAdapterInput, convertAdapterInput, seedDemoData } from "./api";
 import styles from "./HitlReviewModal.module.css";
 
@@ -98,7 +98,63 @@ export function HitlReviewModal({
   const [showManualInput, setShowManualInput] = useState<boolean>(false);
   const [manualJsonText, setManualJsonText] = useState<string>("");
 
-  // 은은한 반짝임 애니메이션 트리거 함수 (850ms 동안 유지 후 자동 해제)
+  // 가로 스크롤(유튜브 스타일) 및 마우스 드래그(Grab to scroll) 상태
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState<boolean>(false);
+  const [canScrollRight, setCanScrollRight] = useState<boolean>(false);
+  const isDraggingRef = useRef<boolean>(false);
+  const startXRef = useRef<number>(0);
+  const scrollLeftRef = useRef<number>(0);
+  const dragDistanceRef = useRef<number>(0);
+  const [isDraggingState, setIsDraggingState] = useState<boolean>(false);
+
+  // 스크롤 가능 여부 체크
+  const checkScrollable = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 4);
+    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+  }, []);
+
+  // 유튜브 스타일 좌우 1단계 스크롤 이동
+  const handleScrollStep = (offset: number) => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollBy({ left: offset, behavior: "smooth" });
+      setTimeout(checkScrollable, 300);
+    }
+  };
+
+  // 마우스 드래그(Grab to scroll) 핸들러
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!scrollRef.current) return;
+    isDraggingRef.current = true;
+    setIsDraggingState(true);
+    startXRef.current = e.pageX - scrollRef.current.offsetLeft;
+    scrollLeftRef.current = scrollRef.current.scrollLeft;
+    dragDistanceRef.current = 0;
+  };
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isDraggingRef.current || !scrollRef.current) return;
+    e.preventDefault();
+    const x = e.pageX - scrollRef.current.offsetLeft;
+    const walk = (x - startXRef.current) * 1.5;
+    dragDistanceRef.current = Math.abs(x - startXRef.current);
+    scrollRef.current.scrollLeft = scrollLeftRef.current - walk;
+    checkScrollable();
+  };
+
+  const handleMouseUp = () => {
+    isDraggingRef.current = false;
+    setIsDraggingState(false);
+  };
+
+  const handleMouseLeave = () => {
+    isDraggingRef.current = false;
+    setIsDraggingState(false);
+  };
+
+  // 은은하고 차분한 반짝임 애니메이션 트리거 함수 (1400ms 동안 수채화 펄스 유지 후 자동 해제)
   const triggerFlash = useCallback((affectedIds: string[], type: "appear" | "disappear") => {
     setFlashedItemIds((prev) => {
       const next = new Map(prev);
@@ -116,7 +172,7 @@ export function HitlReviewModal({
         }
         return next;
       });
-    }, 850);
+    }, 1400);
   }, []);
 
   // 프로듀서 변경 시 번들 로드 함수
@@ -160,13 +216,14 @@ export function HitlReviewModal({
           setEnabledItemIds(new Set(["main", "second"]));
         }
         setSelectedItemId("main");
+        setTimeout(checkScrollable, 200);
       } catch (err: any) {
         setError(err.message || "시연 데이터 번들을 불러오지 못했습니다.");
       } finally {
         setLoading(false);
       }
     },
-    [],
+    [checkScrollable],
   );
 
   // 모달 열림 또는 프로듀서 변경 시 자동 로드
@@ -175,8 +232,6 @@ export function HitlReviewModal({
       loadProducerBundle(producer);
     }
   }, [isOpen, producer, loadProducerBundle]);
-
-  if (!isOpen) return null;
 
   // 특정 항목의 선행 필수 의존 목록 추출 (백엔드 메타데이터 우선 + 프론트 fallback)
   const getItemDependencies = (
@@ -191,6 +246,21 @@ export function HitlReviewModal({
     return FALLBACK_DEPENDENCIES[currentProducer]?.[rowId] || [];
   };
 
+  // 선행 필수 조건들의 명칭(제목) 목록 추출 헬퍼 (마우스 호버 툴팁 안내용)
+  const getPrereqTitles = (
+    rowId: string,
+    currentProducer: ProducerType,
+    rows?: CandidateRow[],
+  ): string[] => {
+    const deps = getItemDependencies(rowId, currentProducer, rows);
+    if (deps.length === 0) return [];
+    const sourceRows = rows || bundleData?.rows || [];
+    return deps.map((depId) => {
+      const found = sourceRows.find((r: CandidateRow) => r.id === depId);
+      return found ? found.title : depId;
+    });
+  };
+
   // 선행 필수 조건(dependsOn) 충족 여부 확인 (범용 DAG)
   const isPrerequisiteMet = (
     rowId: string,
@@ -203,48 +273,76 @@ export function HitlReviewModal({
     return deps.every((depId) => enabled.has(depId));
   };
 
-  // 체크박스 토글 핸들러 (의존 관계 자동 연쇄 해제 & 선행조건 연동 + 은은한 반짝임 피드백)
+  // ★ 핵심: 사용자의 체크 상태(enabledItemIds) 중 선행 조건까지 완전히 충족된 실제 유효 항목들
+  // 부모를 껐을 때 자식의 체크가 해제되지 않고, 단지 effectiveItemIds에서만 제외되어 '보류(Suppressed)'로 처리됨!
+  const effectiveItemIds = useMemo(() => {
+    const rows: CandidateRow[] = bundleData?.rows || [];
+    const effective = new Set<string>();
+
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const r of rows) {
+        if (r.blocked || !enabledItemIds.has(r.id) || effective.has(r.id)) continue;
+        const deps = getItemDependencies(r.id, producer, rows);
+        const allDepsMet = deps.every((depId) => effective.has(depId));
+        if (allDepsMet) {
+          effective.add(r.id);
+          changed = true;
+        }
+      }
+    }
+    return effective;
+  }, [enabledItemIds, bundleData, producer]);
+
+  // ★ 모든 훅 선언이 완료된 후 if (!isOpen) return null; 배치 (React Hooks 규칙 100% 준수)
+  if (!isOpen) return null;
+
+  // 체크박스 토글 핸들러: 자식의 체크 상태를 강제로 끄지 않고 보존함!
+  // 부모를 끄면 자식은 '🔒 선행 대기(Suppressed)' 상태로 바뀌고, 부모를 다시 켜면 자식의 기존 체크가 살아있어 자동 복원됨!
   const handleToggleItem = (id: string, blocked?: boolean) => {
-    if (blocked) return;
+    if (blocked || dragDistanceRef.current > 5) return;
 
     setEnabledItemIds((prev) => {
       const next = new Set(prev);
       const isCurrentlyChecked = next.has(id);
       const rows: CandidateRow[] = bundleData?.rows || [];
 
-      if (isCurrentlyChecked) {
-        // 1. 체크 해제 시: 해당 항목 제거 및 이 항목에 의존하는 모든 자식 항목들을 재귀적 연쇄 해제 (Cascade Uncheck)
-        const toUncheck = [id];
-        const affected = [id];
-        next.delete(id);
-
-        while (toUncheck.length > 0) {
-          const parentId = toUncheck.pop()!;
-          for (const r of rows) {
-            const deps = getItemDependencies(r.id, producer, rows);
-            if (deps.includes(parentId) && next.has(r.id)) {
-              next.delete(r.id);
-              toUncheck.push(r.id);
-              affected.push(r.id);
-            }
-          }
+      // 이 항목과 이 항목에 의존하는 모든 자식 항목들 추적 (애니메이션 펄스용)
+      const affected = [id];
+      for (const r of rows) {
+        const deps = getItemDependencies(r.id, producer, rows);
+        if (deps.includes(id) && next.has(r.id)) {
+          affected.push(r.id);
         }
+      }
+
+      if (isCurrentlyChecked) {
+        // 체크 해제: 자기 자신만 끄고, 자식 체크는 보존(상태 손실 방지)
+        next.delete(id);
         triggerFlash(affected, "disappear");
       } else {
-        // 2. 체크 시: 선행 조건 항목들이 꺼져 있으면 선행 부모들도 함께 켜줌 (Auto-enable prerequisites)
-        const deps = getItemDependencies(id, producer, rows);
-        const affected = [id];
-        for (const depId of deps) {
-          if (!next.has(depId)) {
-            next.add(depId);
-            affected.push(depId);
-          }
-        }
+        // 체크: 자기 자신을 켬
         next.add(id);
         triggerFlash(affected, "appear");
       }
       return next;
     });
+  };
+
+  // 선행 조건 함께 켜기 액션 핸들러 (01 탭 및 툴팁 가이드 버튼용)
+  const handleEnablePrerequisites = (rowId: string) => {
+    const rows: CandidateRow[] = bundleData?.rows || [];
+    const deps = getItemDependencies(rowId, producer, rows);
+    setEnabledItemIds((prev) => {
+      const next = new Set(prev);
+      for (const depId of deps) {
+        next.add(depId);
+      }
+      next.add(rowId);
+      return next;
+    });
+    triggerFlash([...deps, rowId], "appear");
   };
 
   // 전체 선택 / 해제
@@ -261,7 +359,6 @@ export function HitlReviewModal({
       triggerFlash(availableIds, "appear");
     }
   };
-
 
   // 시연 베이스라인 시드 초기화
   const handleResetDemoSeed = async () => {
@@ -288,15 +385,15 @@ export function HitlReviewModal({
     }
   };
 
-  // 최종 반영 및 저장 핸들러
+  // 최종 반영 및 저장 핸들러 (선행 조건까지 충족된 실제 유효 항목만 커밋)
   const handleCommit = async () => {
-    if (!bundleData || enabledItemIds.size === 0) return;
+    if (!bundleData || effectiveItemIds.size === 0) return;
     setCommitting(true);
     setError(null);
     try {
       await commitAdapterInput({
         bundle: bundleData,
-        enabled_ids: Array.from(enabledItemIds),
+        enabled_ids: Array.from(effectiveItemIds),
       });
 
       setToastMessage("지식그래프에 성공적으로 반영되었습니다!");
@@ -311,26 +408,48 @@ export function HitlReviewModal({
     }
   };
 
-  // 실시간 변경 요약 카운트 계산
+  // 실시간 변경 요약 카운트 계산 (실제 유효 반영 및 선행 미충족 보류 건수 표기)
   const summaryCountsText = () => {
-    const a = enabledItemIds.has("main");
-    const b = enabledItemIds.has("second");
-    const n = enabledItemIds.has("note");
-    if (!enabledItemIds.size) return "선택한 변경 없음";
+    const a = effectiveItemIds.has("main");
+    const b = effectiveItemIds.has("second");
+    const n = effectiveItemIds.has("note");
+    const suppressedCount = Array.from(enabledItemIds).filter(
+      (id) => !effectiveItemIds.has(id),
+    ).length;
+    const suppText =
+      suppressedCount > 0 ? ` (선행 미충족 보류 ${suppressedCount}건)` : "";
+
+    if (!effectiveItemIds.size) {
+      return suppressedCount > 0
+        ? `유효 반영 0개${suppText}`
+        : "선택한 변경 없음";
+    }
 
     if (producer === "news") {
-      return `새 노드 ${a ? 1 : 0} · 새 연결 ${a ? 1 : 0} · 계획 카드 ${b ? 1 : 0}`;
+      return `새 노드 ${a ? 1 : 0} · 새 연결 ${a ? 1 : 0} · 계획 카드 ${
+        b ? 1 : 0
+      }${suppText}`;
     }
     if (producer === "gov") {
-      return `새 노드 ${a ? 2 : b ? 1 : 0} · 새 연결 ${a ? 1 : 0} · 외부 분석 ${n ? 1 : 0}`;
+      return `새 노드 ${a ? 2 : 0} · 새 연결 ${a ? 1 : 0} · 외부 분석 ${
+        n ? 1 : 0
+      }${suppText}`;
     }
-    return `새 노드 0 · 새 연결 0 · 수치 ${a ? 1 : 0} · 계산 ${b ? 1 : 0} · 분석 ${n ? 1 : 0}`;
+    return `새 노드 0 · 새 연결 0 · 수치 ${a ? 1 : 0} · 계산 ${
+      b ? 1 : 0
+    } · 분석 ${n ? 1 : 0}${suppText}`;
   };
 
   // 우측 근거 뷰어 내용 렌더링
   const renderEvidenceViewer = () => {
     const s = selectedItemId;
     const isBlocked = s === "blocked";
+    const isSuppressed =
+      s !== "base" &&
+      !isBlocked &&
+      enabledItemIds.has(s) &&
+      !effectiveItemIds.has(s);
+    const prereqTitles = getPrereqTitles(s, producer, bundleData?.rows);
 
     // 하단 매핑 토글 공통 렌더러
     const renderMappingToggle = () =>
@@ -343,6 +462,30 @@ export function HitlReviewModal({
           />
         </details>
       ) : null;
+
+    // 선행 필수 항목 미선택 안내 배너 렌더러
+    const renderSuppressedBanner = () => {
+      if (!isSuppressed) return null;
+      return (
+        <div className={styles.prereqNoticeBanner}>
+          <span className={styles.prereqNoticeIcon}>⚠️</span>
+          <div className={styles.prereqNoticeText}>
+            <strong>선행 항목 미선택으로 현재 반영 보류 중</strong>
+            <span>
+              이 항목을 지식맵에 반영하려면 선행 항목(
+              <strong>{prereqTitles.join(", ")}</strong>)이 먼저 승인되어야 합니다.
+            </span>
+          </div>
+          <button
+            type="button"
+            className={styles.enablePrereqBtn}
+            onClick={() => handleEnablePrerequisites(s)}
+          >
+            선행 항목 함께 켜기
+          </button>
+        </div>
+      );
+    };
 
     if (s === "base") {
       return (
@@ -393,6 +536,7 @@ export function HitlReviewModal({
     if (producer === "news") {
       return (
         <div className={styles.evidenceBody}>
+          {renderSuppressedBanner()}
           <div className={styles.sourceHeader}>
             <span
               className={`${styles.tag} ${
@@ -515,6 +659,7 @@ export function HitlReviewModal({
     if (producer === "gov") {
       return (
         <div className={styles.evidenceBody}>
+          {renderSuppressedBanner()}
           <div className={styles.sourceHeader}>
             <span
               className={`${styles.tag} ${
@@ -654,6 +799,7 @@ export function HitlReviewModal({
     if (producer === "excel") {
       return (
         <div className={styles.evidenceBody}>
+          {renderSuppressedBanner()}
           <div className={styles.sourceHeader}>
             <span
               className={`${styles.tag} ${
@@ -815,25 +961,27 @@ export function HitlReviewModal({
     return null;
   };
 
-  // 후보 목록 렌더링 헬퍼 (Tab 01 및 Tab 02 공용)
+  // 후보 목록 렌더링 헬퍼 (Tab 01 좌측 패널)
   const renderCandidateList = () => (
     <div className={styles.candidateList}>
       {bundleData?.rows?.map((row: CandidateRow) => {
         const isSelected = selectedItemId === row.id;
         const isChecked = enabledItemIds.has(row.id);
         const isBlocked = Boolean(row.blocked);
-        const isPrereqMet = isPrerequisiteMet(
-          row.id,
-          producer,
-          enabledItemIds,
-          bundleData?.rows,
-        );
-        const isDisabled = isBlocked || (!isChecked && !isPrereqMet);
+        const isEffective = effectiveItemIds.has(row.id);
+        const isSuppressed = isChecked && !isEffective;
+        const prereqs = getPrereqTitles(row.id, producer, bundleData?.rows);
 
         let tagClass = styles.tagPanel;
         if (row.cls === "new") tagClass = styles.tagNew;
         if (row.cls === "note") tagClass = styles.tagNote;
         if (row.cls === "warn" || isBlocked) tagClass = styles.tagWarn;
+
+        const tooltip = isBlocked
+          ? "무근거 후보는 반영이 차단되었습니다"
+          : isSuppressed
+          ? `⚠️ 선행 필수 항목 필요: [${prereqs.join(", ")}] 항목이 켜져야 실제로 반영됩니다.`
+          : row.sub;
 
         return (
           <div
@@ -841,15 +989,16 @@ export function HitlReviewModal({
             className={`${styles.candidateRow} ${
               isSelected ? styles.selectedRow : ""
             } ${isBlocked ? styles.blockedRow : ""} ${
-              isDisabled && !isBlocked ? styles.candidatePillDisabled : ""
+              isSuppressed ? styles.candidatePillSuppressed : ""
             }`}
             onClick={() => setSelectedItemId(row.id)}
+            title={tooltip}
           >
             <div className={styles.checkboxContainer}>
               <input
                 type="checkbox"
                 checked={isChecked}
-                disabled={isDisabled}
+                disabled={isBlocked}
                 onChange={() => handleToggleItem(row.id, isBlocked)}
                 onClick={(e) => e.stopPropagation()}
                 aria-label={`${row.title} 반영 여부`}
@@ -858,16 +1007,12 @@ export function HitlReviewModal({
             <div className={styles.candidateContent}>
               <div className={styles.candidateTitle}>
                 {row.title}
-                {!isPrereqMet && !isChecked && !isBlocked && (
+                {isSuppressed && (
                   <span
-                    style={{
-                      fontSize: "10.5px",
-                      marginLeft: "6px",
-                      color: "#fbbf24",
-                      fontWeight: "normal",
-                    }}
+                    className={styles.pillBadgeSuppressed}
+                    title={`선행 필수 항목 [${prereqs.join(", ")}] 필요`}
                   >
-                    🔒선행필요
+                    🔒 선행 대기
                   </span>
                 )}
               </div>
@@ -900,8 +1045,8 @@ export function HitlReviewModal({
   // 속성 전후 비교표 렌더링 헬퍼 (Tab 02)
   const renderComparisonTable = (side: "before" | "after") => {
     if (producer === "news") {
-      const isMainChecked = enabledItemIds.has("main");
-      const isSecondChecked = enabledItemIds.has("second");
+      const isMainEffective = effectiveItemIds.has("main");
+      const isSecondEffective = effectiveItemIds.has("second");
       return (
         <table className={styles.compareTable}>
           <tbody>
@@ -913,7 +1058,7 @@ export function HitlReviewModal({
               className={`
                 ${
                   side === "after"
-                    ? isMainChecked
+                    ? isMainEffective
                       ? styles.compareRowChanged
                       : styles.compareRowExcluded
                     : ""
@@ -925,7 +1070,7 @@ export function HitlReviewModal({
               <td>
                 {side === "before" ? (
                   <span style={{ color: "#7b93ae" }}>정보 없음 (미등록)</span>
-                ) : isMainChecked ? (
+                ) : isMainEffective ? (
                   <span>
                     <strong>누리소재</strong> (2026.09.25 공급계약 신규 연결)
                   </span>
@@ -947,7 +1092,7 @@ export function HitlReviewModal({
               className={`
                 ${
                   side === "after"
-                    ? isSecondChecked
+                    ? isSecondEffective
                       ? styles.compareRowChanged
                       : styles.compareRowExcluded
                     : ""
@@ -959,7 +1104,7 @@ export function HitlReviewModal({
               <td>
                 {side === "before" ? (
                   <span style={{ color: "#7b93ae" }}>등록된 계획 없음</span>
-                ) : isSecondChecked ? (
+                ) : isSecondEffective ? (
                   <span>
                     <span className={styles.reportBadge}>리포트 보관</span>{" "}
                     2027년 증산 검토 계획 카드 보관
@@ -981,7 +1126,7 @@ export function HitlReviewModal({
               className={`
                 ${
                   side === "after"
-                    ? isMainChecked
+                    ? isMainEffective
                       ? styles.compareRowPending
                       : styles.compareRowExcluded
                     : ""
@@ -993,7 +1138,7 @@ export function HitlReviewModal({
               <td>
                 {side === "before" ? (
                   <span style={{ color: "#7b93ae" }}>기존 2024 분석 유지</span>
-                ) : isMainChecked ? (
+                ) : isMainEffective ? (
                   <span>
                     <strong>종합 리포트 갱신 예정</strong> (누리소재 공급계약
                     반영)
@@ -1015,9 +1160,11 @@ export function HitlReviewModal({
         </table>
       );
     } else if (producer === "gov") {
-      const isMainChecked = enabledItemIds.has("main");
-      const isSecondChecked = enabledItemIds.has("second");
-      const isNoteChecked = enabledItemIds.has("note");
+      const isMainEffective = effectiveItemIds.has("main");
+      const isSecondEffective = effectiveItemIds.has("second");
+      const isNoteEffective = effectiveItemIds.has("note");
+      const isSecondSuppressed =
+        enabledItemIds.has("second") && !isSecondEffective;
       return (
         <table className={styles.compareTable}>
           <tbody>
@@ -1025,7 +1172,7 @@ export function HitlReviewModal({
               className={`
                 ${
                   side === "after"
-                    ? isMainChecked
+                    ? isMainEffective
                       ? styles.compareRowChanged
                       : styles.compareRowExcluded
                     : ""
@@ -1037,7 +1184,7 @@ export function HitlReviewModal({
               <td>
                 {side === "before" ? (
                   <span style={{ color: "#7b93ae" }}>정보 없음 (미등록)</span>
-                ) : isMainChecked ? (
+                ) : isMainEffective ? (
                   <span>
                     <strong>새봄산업지원원</strong> (신규 주관기관 노드)
                   </span>
@@ -1055,7 +1202,7 @@ export function HitlReviewModal({
               className={`
                 ${
                   side === "after"
-                    ? isMainChecked
+                    ? isMainEffective
                       ? styles.compareRowChanged
                       : styles.compareRowExcluded
                     : ""
@@ -1067,7 +1214,7 @@ export function HitlReviewModal({
               <td>
                 {side === "before" ? (
                   <span style={{ color: "#7b93ae" }}>공고 미등록</span>
-                ) : isMainChecked ? (
+                ) : isMainEffective ? (
                   <span>
                     <strong>2026 제조데이터 실증지원 사업</strong> (신규 사업
                     노드)
@@ -1086,7 +1233,7 @@ export function HitlReviewModal({
               className={`
                 ${
                   side === "after"
-                    ? isSecondChecked
+                    ? isSecondEffective
                       ? styles.compareRowChanged
                       : styles.compareRowExcluded
                     : ""
@@ -1098,18 +1245,25 @@ export function HitlReviewModal({
               <td>
                 {side === "before" ? (
                   <span style={{ color: "#7b93ae" }}>속성 없음</span>
-                ) : isSecondChecked ? (
+                ) : isSecondEffective ? (
                   <span>
                     <strong>총 20억원 · 기업당 최대 1억원 · 마감 10.30</strong>
                   </span>
-                ) : (
+                ) : isSecondSuppressed ? (
                   <span>
                     —{" "}
                     <span className={styles.excludedBadge}>
-                      속성 반영 제외 (기본명칭만 등록)
+                      🔒 속성 반영 보류
                     </span>
+                    <small style={{ color: "#fbbf24", marginLeft: "6px" }}>
+                      (상단 사업 노드 미선택으로 속성 적재 보류)
+                    </small>
+                  </span>
+                ) : (
+                  <span>
+                    — <span className={styles.excludedBadge}>반영 제외됨</span>
                     <small style={{ color: "#94a7c0", marginLeft: "6px" }}>
-                      (상단 '사업 예산·지원 상한' 미체크 상태)
+                      (상단 공고 세부 속성 미체크 상태)
                     </small>
                   </span>
                 )}
@@ -1119,7 +1273,7 @@ export function HitlReviewModal({
               className={`
                 ${
                   side === "after"
-                    ? isNoteChecked
+                    ? isNoteEffective
                       ? styles.compareRowChanged
                       : styles.compareRowExcluded
                     : ""
@@ -1131,7 +1285,7 @@ export function HitlReviewModal({
               <td>
                 {side === "before" ? (
                   <span style={{ color: "#7b93ae" }}>추천의견 없음</span>
-                ) : isNoteChecked ? (
+                ) : isNoteEffective ? (
                   <span>
                     <span className={styles.reportBadge}>리포트 보관</span>{" "}
                     GovInsight 신청 요건 검토 권고의견
@@ -1154,9 +1308,12 @@ export function HitlReviewModal({
       );
     } else {
       // excel
-      const isMainChecked = enabledItemIds.has("main");
-      const isSecondChecked = enabledItemIds.has("second");
-      const isNoteChecked = enabledItemIds.has("note");
+      const isMainEffective = effectiveItemIds.has("main");
+      const isSecondEffective = effectiveItemIds.has("second");
+      const isNoteEffective = effectiveItemIds.has("note");
+      const isSecondSuppressed =
+        enabledItemIds.has("second") && !isSecondEffective;
+
       return (
         <table className={styles.compareTable}>
           <tbody>
@@ -1168,7 +1325,7 @@ export function HitlReviewModal({
                 ) : (
                   <span>
                     한결정밀{" "}
-                    {isMainChecked && (
+                    {isMainEffective && (
                       <span className={styles.tagWarn}>속성 보강</span>
                     )}
                   </span>
@@ -1183,7 +1340,7 @@ export function HitlReviewModal({
               className={`
                 ${
                   side === "after"
-                    ? isMainChecked
+                    ? isMainEffective
                       ? styles.compareRowChanged
                       : styles.compareRowExcluded
                     : ""
@@ -1195,7 +1352,7 @@ export function HitlReviewModal({
               <td>
                 {side === "before" ? (
                   <span style={{ color: "#7b93ae" }}>미등록 (공백)</span>
-                ) : isMainChecked ? (
+                ) : isMainEffective ? (
                   <span>
                     <strong>120억원</strong> (실적!C3 발췌 · 신규 적재)
                   </span>
@@ -1213,7 +1370,7 @@ export function HitlReviewModal({
               className={`
                 ${
                   side === "after"
-                    ? isSecondChecked
+                    ? isSecondEffective
                       ? styles.compareRowChanged
                       : styles.compareRowExcluded
                     : ""
@@ -1225,9 +1382,19 @@ export function HitlReviewModal({
               <td>
                 {side === "before" ? (
                   <span style={{ color: "#7b93ae" }}>산식 없음</span>
-                ) : isSecondChecked ? (
+                ) : isSecondEffective ? (
                   <span>
                     <strong>+20% 증가</strong> ((120 - 100) / 100 × 100)
+                  </span>
+                ) : isSecondSuppressed ? (
+                  <span>
+                    —{" "}
+                    <span className={styles.excludedBadge}>
+                      🔒 증감률 반영 보류
+                    </span>
+                    <small style={{ color: "#fbbf24", marginLeft: "6px" }}>
+                      (체크되어 있으나 선행 2025년 매출 120억원 미선택으로 계산 보류)
+                    </small>
                   </span>
                 ) : (
                   <span>
@@ -1243,7 +1410,7 @@ export function HitlReviewModal({
               className={`
                 ${
                   side === "after"
-                    ? isNoteChecked
+                    ? isNoteEffective
                       ? styles.compareRowChanged
                       : styles.compareRowExcluded
                     : ""
@@ -1255,7 +1422,7 @@ export function HitlReviewModal({
               <td>
                 {side === "before" ? (
                   <span style={{ color: "#7b93ae" }}>추정 없음</span>
-                ) : isNoteChecked ? (
+                ) : isNoteEffective ? (
                   <span>
                     <span className={styles.reportBadge}>리포트 보관</span>{" "}
                     수요 증가 영향 가능성 메모 보관
@@ -1322,7 +1489,7 @@ export function HitlReviewModal({
     );
 
     if (producer === "news") {
-      const isMainChecked = enabledItemIds.has("main");
+      const isMainChecked = effectiveItemIds.has("main");
       const showNewEdge = !isBefore && isMainChecked;
       const isSelected = selectedItemId === "main";
 
@@ -1574,8 +1741,8 @@ export function HitlReviewModal({
         </svg>
       );
     } else if (producer === "gov") {
-      const isMainChecked = enabledItemIds.has("main");
-      const isSecondChecked = enabledItemIds.has("second");
+      const isMainChecked = effectiveItemIds.has("main");
+      const isSecondChecked = effectiveItemIds.has("second");
       const showGovNodes = !isBefore && isMainChecked;
       const isMainSelected = selectedItemId === "main";
       const isSecondSelected = selectedItemId === "second";
@@ -1806,8 +1973,8 @@ export function HitlReviewModal({
       );
     } else {
       // Excel Agent
-      const isMainChecked = enabledItemIds.has("main");
-      const isSecondChecked = enabledItemIds.has("second");
+      const isMainChecked = effectiveItemIds.has("main");
+      const isSecondChecked = effectiveItemIds.has("second");
       const isMainSelected = selectedItemId === "main";
       const isSecondSelected = selectedItemId === "second";
       const showNewMetric = !isBefore && isMainChecked;
@@ -2248,9 +2415,32 @@ export function HitlReviewModal({
                   <strong>반영 항목 토글:</strong>
                 </div>
 
-                <div className={styles.compactCandidatePills}>
+                {canScrollLeft && (
+                  <button
+                    type="button"
+                    className={`${styles.scrollNavBtn} ${styles.scrollNavLeft}`}
+                    onClick={() => handleScrollStep(-160)}
+                    aria-label="왼쪽으로 스크롤"
+                    title="왼쪽으로 이동"
+                  >
+                    ‹
+                  </button>
+                )}
+
+                <div
+                  ref={scrollRef}
+                  className={`${styles.compactCandidatePills} ${
+                    isDraggingState ? styles.compactCandidatePillsDragging : ""
+                  }`}
+                  onMouseDown={handleMouseDown}
+                  onMouseMove={handleMouseMove}
+                  onMouseUp={handleMouseUp}
+                  onMouseLeave={handleMouseLeave}
+                  onScroll={checkScrollable}
+                >
                   {bundleData?.rows?.map((row: CandidateRow) => {
                     const isChecked = enabledItemIds.has(row.id);
+                    const isEffective = effectiveItemIds.has(row.id);
                     const isBlocked = Boolean(row.blocked);
                     const isPrereqMet = isPrerequisiteMet(
                       row.id,
@@ -2258,13 +2448,16 @@ export function HitlReviewModal({
                       enabledItemIds,
                       bundleData?.rows,
                     );
-                    const isDisabled = isBlocked || (!isChecked && !isPrereqMet);
+                    const isSuppressed = isChecked && !isEffective && !isBlocked;
+                    const prereqs = getPrereqTitles(row.id, producer, bundleData?.rows);
 
                     let tooltip = row.sub;
                     if (isBlocked) {
                       tooltip = "무근거 후보는 반영이 차단되었습니다";
+                    } else if (isSuppressed) {
+                      tooltip = `선행 필수 항목 [${prereqs.join(", ")}] 미선택으로 반영 보류 중 (부모 항목 선택 시 자동 활성화)`;
                     } else if (!isPrereqMet && !isChecked) {
-                      tooltip = "선행 필수 항목이 먼저 선택되어야 활성화됩니다";
+                      tooltip = `선행 필수 항목 [${prereqs.join(", ")}] 먼저 선택 필요`;
                     }
 
                     return (
@@ -2272,21 +2465,36 @@ export function HitlReviewModal({
                         key={row.id}
                         className={`${styles.candidatePill} ${
                           isChecked ? styles.candidatePillChecked : ""
-                        } ${isBlocked ? styles.candidatePillBlocked : ""} ${
-                          isDisabled && !isBlocked
-                            ? styles.candidatePillDisabled
-                            : ""
+                        } ${isSuppressed ? styles.candidatePillSuppressed : ""} ${
+                          isBlocked ? styles.candidatePillBlocked : ""
                         }`}
                         title={tooltip}
+                        onClick={(e) => {
+                          if (dragDistanceRef.current > 4) {
+                            e.preventDefault();
+                          }
+                        }}
                       >
                         <input
                           type="checkbox"
                           checked={isChecked}
-                          disabled={isDisabled}
-                          onChange={() => handleToggleItem(row.id, isBlocked)}
+                          disabled={isBlocked}
+                          onChange={() => {
+                            if (dragDistanceRef.current <= 4) {
+                              handleToggleItem(row.id, isBlocked);
+                            }
+                          }}
                         />
                         <span className={styles.pillTitle}>
                           {row.title}
+                          {isSuppressed && (
+                            <span
+                              className={styles.pillBadgeSuppressed}
+                              title={`선행 필수 항목 [${prereqs.join(", ")}] 필요`}
+                            >
+                              🔒 선행 대기
+                            </span>
+                          )}
                           {!isPrereqMet && !isChecked && !isBlocked && (
                             <span
                               style={{
@@ -2296,7 +2504,7 @@ export function HitlReviewModal({
                                 fontWeight: "normal",
                               }}
                             >
-                              🔒선행필요
+                              🔒 선행 필요
                             </span>
                           )}
                         </span>
@@ -2305,6 +2513,18 @@ export function HitlReviewModal({
                     );
                   })}
                 </div>
+
+                {canScrollRight && (
+                  <button
+                    type="button"
+                    className={`${styles.scrollNavBtn} ${styles.scrollNavRight}`}
+                    onClick={() => handleScrollStep(160)}
+                    aria-label="오른쪽으로 스크롤"
+                    title="오른쪽으로 이동"
+                  >
+                    ›
+                  </button>
+                )}
 
                 <button
                   type="button"

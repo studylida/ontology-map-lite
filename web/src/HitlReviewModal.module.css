@@ -1108,6 +1108,9 @@
   overflow-y: hidden;
   flex: 1;
   padding: 2px 0;
+  cursor: grab;
+  user-select: none;
+  scroll-behavior: smooth;
 }
 
 .compactCandidatePills::-webkit-scrollbar {
@@ -1258,15 +1261,85 @@
   font-weight: 600;
 }
 
-/* 은은한 반짝임(Hover-like Flash/Pulse) 애니메이션 */
+/* 의존성 미충족 보류(Suppressed) 상태: 체크는 유지하되 빗금 해칭 + 50% 딤드 + 호박색 뱃지 */
+.candidatePillSuppressed {
+  opacity: 0.8;
+  background: repeating-linear-gradient(
+    135deg,
+    rgba(245, 158, 11, 0.08),
+    rgba(245, 158, 11, 0.08) 6px,
+    rgba(16, 25, 38, 0.8) 6px,
+    rgba(16, 25, 38, 0.8) 12px
+  ) !important;
+  border: 1px dashed rgba(245, 158, 11, 0.55) !important;
+  color: #fbbf24 !important;
+  cursor: pointer;
+}
+
+.candidatePillSuppressed input[type="checkbox"] {
+  accent-color: #f59e0b;
+  opacity: 0.85;
+}
+
+.pillBadgeSuppressed {
+  display: inline-flex;
+  align-items: center;
+  font-size: 9px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgba(245, 158, 11, 0.18);
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  color: #fbbf24;
+  font-weight: 600;
+  margin-left: 4px;
+}
+
+/* 유튜브 카테고리 스타일 가로 스크롤 좌우 네비게이션 버튼 */
+.scrollNavBtn {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(20, 36, 59, 0.95);
+  border: 1px solid #365074;
+  color: #ecf1fa;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  transition: all 0.15s ease;
+  user-select: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.scrollNavBtn:hover {
+  background: #25446c;
+  color: #64d1ef;
+  border-color: #64d1ef;
+  transform: scale(1.1);
+}
+
+.scrollNavBtn:active {
+  transform: scale(0.95);
+}
+
+.compactCandidatePillsDragging {
+  cursor: grabbing !important;
+  scroll-behavior: auto !important;
+}
+
+/* 은은하고 차분한 반짝임(1.4s, 6px 내외 수채화 펄스) 애니메이션 */
 @keyframes rowFlashAppear {
   0% {
     background-color: transparent;
     box-shadow: none;
   }
-  35% {
-    background-color: rgba(100, 209, 239, 0.18);
-    box-shadow: inset 0 0 14px rgba(100, 209, 239, 0.4);
+  30% {
+    background-color: rgba(100, 209, 239, 0.09);
+    box-shadow: inset 0 0 6px rgba(100, 209, 239, 0.2);
   }
   100% {
     background-color: transparent;
@@ -1279,9 +1352,9 @@
     background-color: transparent;
     box-shadow: none;
   }
-  35% {
-    background-color: rgba(239, 68, 68, 0.18);
-    box-shadow: inset 0 0 14px rgba(239, 68, 68, 0.35);
+  30% {
+    background-color: rgba(239, 68, 68, 0.08);
+    box-shadow: inset 0 0 6px rgba(239, 68, 68, 0.18);
   }
   100% {
     background-color: rgba(15, 23, 42, 0.45);
@@ -1293,8 +1366,8 @@
   0% {
     filter: drop-shadow(0 0 0 rgba(100, 209, 239, 0));
   }
-  40% {
-    filter: drop-shadow(0 0 16px rgba(100, 209, 239, 0.95)) brightness(1.2);
+  35% {
+    filter: drop-shadow(0 0 6px rgba(100, 209, 239, 0.45));
   }
   100% {
     filter: drop-shadow(0 0 0 rgba(100, 209, 239, 0));
@@ -1305,8 +1378,8 @@
   0% {
     filter: drop-shadow(0 0 0 rgba(239, 68, 68, 0));
   }
-  40% {
-    filter: drop-shadow(0 0 14px rgba(239, 68, 68, 0.8)) brightness(0.85);
+  35% {
+    filter: drop-shadow(0 0 5px rgba(239, 68, 68, 0.35));
   }
   100% {
     filter: drop-shadow(0 0 0 rgba(239, 68, 68, 0));
@@ -1314,19 +1387,71 @@
 }
 
 .rowFlashAppear {
-  animation: rowFlashAppear 0.85s ease-out;
+  animation: rowFlashAppear 1.4s ease-out;
 }
 
 .rowFlashDisappear {
-  animation: rowFlashDisappear 0.85s ease-out;
+  animation: rowFlashDisappear 1.4s ease-out;
 }
 
 .svgFlashAppear {
-  animation: svgPulseAppear 0.85s ease-out;
+  animation: svgPulseAppear 1.4s ease-out;
 }
 
 .svgFlashDisappear {
-  animation: svgPulseDisappear 0.85s ease-out;
+  animation: svgPulseDisappear 1.4s ease-out;
+}
+
+/* 01 근거 검토 탭 전용 선행 항목 미선택 안내 배너 */
+.prereqNoticeBanner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  border-radius: 8px;
+  margin-bottom: 12px;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.prereqNoticeIcon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.prereqNoticeText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  color: #fde68a;
+  flex: 1;
+}
+
+.prereqNoticeText strong {
+  color: #fbbf24;
+  font-size: 12.5px;
+}
+
+.enablePrereqBtn {
+  background: rgba(245, 158, 11, 0.22);
+  border: 1px solid #f59e0b;
+  color: #fbbf24;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.enablePrereqBtn:hover {
+  background: rgba(245, 158, 11, 0.4);
+  color: #ffffff;
+  border-color: #fbbf24;
 }
 
 
