@@ -111,10 +111,10 @@ export function layoutTargets(
 
   // -------------------------------------------------------------
   // STEP 2: 2-hop 외곽 호(Arc) 부채꼴 배치
-  // (불필요한 공백을 줄이고 R2 = R1 + 120px로 단축)
+  // (과도한 이격을 줄이고 가시성을 높임: R2 = R1 + 95px)
   // -------------------------------------------------------------
   const hasTwoHop = twoHopNodes.length > 0;
-  const R2 = R1 + (hasTwoHop ? 120 : 80);
+  const R2 = R1 + (hasTwoHop ? 95 : 75);
 
   // 2-hop 노드별 주 부모(1-hop) 노드 탐색 및 그룹화
   const twoHopByParent = new Map<string, Array<{ id: string | number; tier?: string }>>();
@@ -152,8 +152,15 @@ export function layoutTargets(
     const parentAngle = nodeAngles.get(parentId) ?? 0;
     const K = children.length;
 
-    // 인접 1-hop과의 겹침을 방지하기 위한 최대 호 폭 (부모 간격의 75% 이내)
-    const maxArcSpan = Math.min(deltaTheta1 * 0.75, Math.PI * 0.6);
+    // 1-hop 부모가 1~2개로 적을 때 중심 노드를 둥글게 둘러쌀 수 있도록 호를 대폭 확장
+    let maxArcSpan: number;
+    if (N1 === 1) {
+      maxArcSpan = Math.min(Math.PI * 1.45, Math.max(Math.PI * 0.9, K * 0.35));
+    } else if (N1 === 2) {
+      maxArcSpan = Math.min(Math.PI * 0.95, deltaTheta1 * 0.85);
+    } else {
+      maxArcSpan = Math.min(deltaTheta1 * 0.75, Math.PI * 0.65);
+    }
 
     if (K === 1) {
       const child = children[0];
@@ -174,7 +181,7 @@ export function layoutTargets(
         nodeAngles.set(cIdStr, childAngle);
 
         // 자식이 3개 이상이면 지그재그(Stagger)로 반경을 살짝 교대하여 가독성 강화
-        const staggerRadius = R2 + (idx % 2 === 1 && K > 2 ? 30 : 0);
+        const staggerRadius = R2 + (idx % 2 === 1 && K > 2 ? 22 : 0);
 
         const x = anchor.x + staggerRadius * Math.cos(childAngle);
         const y = anchor.y + staggerRadius * Math.sin(childAngle);
@@ -200,22 +207,52 @@ export function layoutTargets(
   }
 
   // -------------------------------------------------------------
-  // STEP 3: 3-hop 및 외곽(Ambient) 노드 스마트 가시 반경 배치
-  // (2-hop이 없을 경우 600px 밖으로 날리지 않고 R1 + 95px의 가시 궤도로 당김)
+  // STEP 3: 3-hop 및 외곽(Ambient) 노드 스마트 가시 반경 및 빈 공간 우선 채우기
+  // (R3 = R2 + 85px로 콤팩트화하여 전체화면 맞춤 시 과도한 축소 방지)
   // -------------------------------------------------------------
-  const R3 = hasTwoHop ? R2 + 105 : R1 + 95;
+  const R3 = hasTwoHop ? R2 + 85 : R1 + 80;
   const N3 = outerNodes.length;
+
   if (N3 > 0) {
-    const deltaTheta3 = (2 * Math.PI) / N3;
+    // 1. 현재 배치된 모든 노드의 각도 수집하여 가장 큰 빈 각도 섹터(Empty Sector) 탐색
+    const assignedAngles = Array.from(nodeAngles.values())
+      .map(normalizeAngle)
+      .sort((a, b) => a - b);
+
+    let maxGap = 0;
+    let gapStart = 0;
+    if (assignedAngles.length > 0) {
+      for (let i = 0; i < assignedAngles.length; i++) {
+        const a1 = assignedAngles[i];
+        const a2 =
+          i === assignedAngles.length - 1
+            ? assignedAngles[0] + 2 * Math.PI
+            : assignedAngles[i + 1];
+        const gap = a2 - a1;
+        if (gap > maxGap) {
+          maxGap = gap;
+          gapStart = a1;
+        }
+      }
+    } else {
+      maxGap = 2 * Math.PI;
+      gapStart = -Math.PI;
+    }
+
+    // 빈 공간의 중심 각도 (예: 상단 12시/10시~2시 방향)
+    const emptySectorCenter = normalizeAngle(gapStart + maxGap / 2);
+    // 빈 공간 내에서 외곽 노드들이 펼쳐질 각도 범위
+    const sectorSpan = Math.min(maxGap * 0.85, Math.PI * 1.3);
+    const sectorStart = emptySectorCenter - sectorSpan / 2;
+    const sectorStep = N3 > 1 ? sectorSpan / (N3 - 1) : 0;
+
     outerNodes.forEach((node, i) => {
       const nId = String(node.id);
       if (nId === cId) return;
 
-      // 1-hop 노드가 1~3개로 적을 때, 1-hop 노드가 없는 반대편 빈 각도부터 우선 채움
-      let baseAngle = N1 <= 3
-        ? startTheta1 + Math.PI + ((i + 0.5) * (2 * Math.PI)) / N3
-        : startTheta1 + (i + 0.25) * deltaTheta3;
+      let baseAngle: number;
 
+      // 연결된 상위 노드가 있는지 탐색
       const connectedEdge = relations.find((r) => {
         const s = String(r.source);
         const t = String(r.target);
@@ -225,13 +262,29 @@ export function layoutTargets(
       });
 
       if (connectedEdge) {
-        const upId = String(connectedEdge.source) === nId ? String(connectedEdge.target) : String(connectedEdge.source);
-        baseAngle = (nodeAngles.get(upId) ?? baseAngle) + (i % 2 === 0 ? 0.2 : -0.2);
+        const upId =
+          String(connectedEdge.source) === nId
+            ? String(connectedEdge.target)
+            : String(connectedEdge.source);
+        const upAngle = nodeAngles.get(upId) ?? emptySectorCenter;
+        // 상위 노드가 밀집 구역에 있을 때 빈 섹터 방향으로 자연스럽게 외곽 배치
+        const angleToEmpty = normalizeAngle(emptySectorCenter - upAngle);
+        const pullFactor = maxGap > Math.PI ? 0.35 : 0.15;
+        baseAngle =
+          upAngle +
+          (angleToEmpty > 0 ? pullFactor : -pullFactor) +
+          (i % 2 === 0 ? 0.12 : -0.12);
+      } else {
+        // 독립/앰비언트 노드(새봄산업지원원, 제조데이터 실증지원 등)는 가장 큰 빈 공간(상단)에 우선 안착!
+        baseAngle = N3 > 1 ? sectorStart + i * sectorStep : emptySectorCenter;
       }
 
+      baseAngle = normalizeAngle(baseAngle);
       nodeAngles.set(nId, baseAngle);
-      const x = anchor.x + R3 * Math.cos(baseAngle);
-      const y = anchor.y + R3 * Math.sin(baseAngle);
+
+      const radiusStagger = R3 + (i % 2 === 1 && N3 > 2 ? 20 : 0);
+      const x = anchor.x + radiusStagger * Math.cos(baseAngle);
+      const y = anchor.y + radiusStagger * Math.sin(baseAngle);
       const z = anchor.z + depthTargetForNode({ id: nId }) * depthScale;
       positions.set(nId, { x, y, z });
     });

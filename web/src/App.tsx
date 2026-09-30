@@ -22,11 +22,10 @@ export function App() {
 
   // 1. 기본 3D 그래프 상태 (동적으로 최다 관계 노드를 감지하여 설정)
   const [centerNodeId, setCenterNodeId] = useState<number | null>(null);
+  const activeCenterNodeIdRef = useRef<number | null>(null);
   const [nodes, setNodes] = useState<GraphNode[]>([]);
   const [edges, setEdges] = useState<GraphEdge[]>([]);
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
-  const [hasOmitted, setHasOmitted] = useState<boolean>(false);
-  const [omittedCount, setOmittedCount] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -60,13 +59,16 @@ export function App() {
   );
   const introStarted = graphReady && loadingPhase === "hidden";
 
-  // 3. 중심 노드 변경 시 서브그래프 로드 (기존 탐색 노드는 ambient로 누적 보존)
+  // 3. 중심 노드 변경 시 서브그래프 로드 (1~2홉 즉각 렌더링 + 4홉 백그라운드 무자극 병합)
   const loadGraph = useCallback(
-    async (nodeId: number, unbounded: boolean = false) => {
+    async (nodeId: number, forceUnbounded: boolean = false) => {
+      activeCenterNodeIdRef.current = nodeId;
       setLoading(true);
       setError(null);
       try {
-        const res = await fetchSubgraph(nodeId, unbounded);
+        // 1단계: 1~2-hop 즉시 로드 (10ms 초고속 반응)
+        const res = await fetchSubgraph(nodeId, forceUnbounded);
+        if (activeCenterNodeIdRef.current !== nodeId) return;
         if (res.nodes.length === 0) {
           throw new Error("표시할 그래프 데이터가 없습니다.");
         }
@@ -102,15 +104,53 @@ export function App() {
           return merged;
         });
 
-        setHasOmitted(Boolean(res.has_omitted));
-        setOmittedCount(res.omitted_count ?? 0);
-
         const center =
           res.nodes.find((n) => n.id === nodeId) ?? res.nodes[0] ?? null;
         if (center) {
           setSelectedNode({ ...center });
         } else {
           setSelectedNode(null);
+        }
+
+        // 1~2홉 데이터가 렌더링 준비되었으므로 스피너 즉시 해제
+        setLoading(false);
+
+        // 2단계: 생략된 이웃 노드(4-hop)가 있을 시 사용자가 보고 있는 동안 백그라운드에서 조용히 심층 로드 및 병합
+        if (res.has_omitted && !forceUnbounded) {
+          fetchSubgraph(nodeId, true)
+            .then((deepRes) => {
+              // 응답 도착 시 사용자가 다른 노드로 이동했으면 폐기
+              if (activeCenterNodeIdRef.current !== nodeId) return;
+              if (!deepRes || deepRes.nodes.length === 0) return;
+
+              // 기존 노드 위치 흔들림 없이 신규 노드/간선만 조용히 병합
+              setNodes((currentNodes) => {
+                const nodeMap = new Map(currentNodes.map((n) => [n.id, n]));
+                const merged = [...currentNodes];
+                for (const dNode of deepRes.nodes) {
+                  if (!nodeMap.has(dNode.id)) {
+                    merged.push(dNode);
+                    nodeMap.set(dNode.id, dNode);
+                  }
+                }
+                return merged;
+              });
+
+              setEdges((currentEdges) => {
+                const edgeMap = new Map(currentEdges.map((e) => [e.id, e]));
+                const merged = [...currentEdges];
+                for (const dEdge of deepRes.edges) {
+                  if (!edgeMap.has(dEdge.id)) {
+                    merged.push(dEdge);
+                    edgeMap.set(dEdge.id, dEdge);
+                  }
+                }
+                return merged;
+              });
+            })
+            .catch(() => {
+              // 백그라운드 4-hop 로드 오류는 사용자 인터랙션을 방해하지 않도록 무시
+            });
         }
       } catch {
         setError(
@@ -189,10 +229,8 @@ export function App() {
   );
 
   const handlePanBoundary = useCallback(() => {
-    if (hasOmitted && !loading && centerNodeId !== null) {
-      loadGraph(centerNodeId, true);
-    }
-  }, [hasOmitted, loading, centerNodeId, loadGraph]);
+    // 경계 도달 시에도 백그라운드 4-hop 로드가 진행되므로 안전
+  }, []);
 
   const handleSelectSearchedNode = useCallback(
     (item: NodeSearchItem) => {
@@ -278,22 +316,6 @@ export function App() {
         />
       </header>
 
-      {/* 미표시된 이웃 노드가 존재할 때 안내 배너 및 전체 펼치기 버튼 */}
-      {hasOmitted && (
-        <div className={styles.omittedBanner}>
-          <span className={styles.omittedText}>
-            ⚠️ 미표시된 이웃 노드가 존재함
-          </span>
-          <button
-            type="button"
-            className={styles.expandAllBtn}
-            onClick={() => loadGraph(centerNodeId, true)}
-            title="생략된 모든 이웃 노드를 캔버스에 추가로 불러옵니다"
-          >
-            이웃 노드 모두 펼치기
-          </button>
-        </div>
-      )}
 
       {/* 메인 뷰: 전체 화면 3D 캔버스 */}
       <main className={styles.mainCanvas}>

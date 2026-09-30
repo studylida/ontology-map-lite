@@ -3,7 +3,6 @@
 const layouts = new WeakMap<HTMLElement, string>();
 
 function priority(label: HTMLElement) {
-  if (label.dataset.focused === "true") return -1;
   return ["center", "direct", "twoHop", "threeHop", "ambient"].indexOf(
     label.dataset.tier ?? "ambient",
   );
@@ -40,16 +39,21 @@ export function placePreviewLabels(container: HTMLElement) {
         }),
     );
 
+  // dataset.focused를 시그니처에서 배제하여 호버 시 불필요한 전체 재배치/연쇄 흔들림 원천 방지
   const signature = `${container.clientWidth}:${container.clientHeight}:${labels
     .map(
       (label) =>
-        `${label.dataset.nodeId}:${label.textContent}:${label.style.transform}:${label.style.opacity}:${label.dataset.focused}:${label.dataset.tier}`,
+        `${label.dataset.nodeId}:${label.textContent}:${label.style.transform}:${label.style.opacity}:${label.dataset.tier}`,
     )
     .join("|")}`;
 
   for (const label of labels) {
-    if (priority(label) <= 0) {
+    if (label.dataset.focused === "true") {
+      label.style.zIndex = "999";
+    } else if (priority(label) <= 0) {
       label.style.zIndex = String(allLabels.length + 1 - priority(label));
+    } else {
+      label.style.zIndex = "10";
     }
   }
 
@@ -86,8 +90,9 @@ export function placePreviewLabels(container: HTMLElement) {
       height: box.height,
     }));
 
-    const cost = (candidate: Box) =>
-      placed.reduce((sum, other) => sum + overlap(candidate, other), 0) +
+    const cost = (candidate: Box, offsetIdx: number) =>
+      placed.reduce((sum, other) => sum + overlap(candidate, other), 0) * 10 +
+      (offsetIdx === 0 ? 0 : 25) +
       10 *
         (candidate.width * candidate.height -
           overlap(candidate, {
@@ -97,14 +102,20 @@ export function placePreviewLabels(container: HTMLElement) {
             height: bounds.height,
           }));
 
-    const best = candidates.reduce(
-      (best, candidate) => (cost(candidate) < cost(best) ? candidate : best),
-      candidates[0] ?? box,
-    );
+    let best = candidates[0] ?? box;
+    let minCost = cost(best, 0);
+
+    candidates.forEach((cand, cIdx) => {
+      const c = cost(cand, cIdx);
+      if (c < minCost) {
+        minCost = c;
+        best = cand;
+      }
+    });
 
     label.style.translate = `${best.x - box.x}px ${best.y - box.y}px`;
-    const protectedLabel = priority(label) <= 0;
-    const hidden = !protectedLabel && cost(best) > 0;
+    const protectedLabel = priority(label) <= 1;
+    const hidden = !protectedLabel && minCost > 60;
     label.style.visibility = hidden ? "hidden" : "visible";
     if (hidden) return;
     placed.push({ ...best, width: best.width + 4, height: best.height + 3 });
