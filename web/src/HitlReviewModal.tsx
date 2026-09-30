@@ -108,12 +108,14 @@ export function HitlReviewModal({
   const dragDistanceRef = useRef<number>(0);
   const [isDraggingState, setIsDraggingState] = useState<boolean>(false);
 
-  // 스크롤 가능 여부 체크
+  // 스크롤 가능 여부 체크 (불필요한 리렌더링 및 미세 진동 방지)
   const checkScrollable = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
-    setCanScrollLeft(el.scrollLeft > 4);
-    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+    const hasLeft = el.scrollLeft > 6;
+    const hasRight = el.scrollLeft + el.clientWidth < el.scrollWidth - 6;
+    setCanScrollLeft((prev) => (prev !== hasLeft ? hasLeft : prev));
+    setCanScrollRight((prev) => (prev !== hasRight ? hasRight : prev));
   }, []);
 
   // 유튜브 스타일 좌우 1단계 스크롤 이동
@@ -2443,17 +2445,19 @@ export function HitlReviewModal({
                   <strong>반영 항목 토글:</strong>
                 </div>
 
-                {canScrollLeft && (
-                  <button
-                    type="button"
-                    className={`${styles.scrollNavBtn} ${styles.scrollNavLeft}`}
-                    onClick={() => handleScrollStep(-160)}
-                    aria-label="왼쪽으로 스크롤"
-                    title="왼쪽으로 이동"
-                  >
-                    ‹
-                  </button>
-                )}
+                <button
+                  type="button"
+                  className={`${styles.scrollNavBtn} ${styles.scrollNavLeft} ${
+                    !canScrollLeft ? styles.scrollNavHidden : ""
+                  }`}
+                  onClick={() => handleScrollStep(-160)}
+                  aria-label="왼쪽으로 스크롤"
+                  title="왼쪽으로 이동"
+                  disabled={!canScrollLeft}
+                  tabIndex={canScrollLeft ? 0 : -1}
+                >
+                  ‹
+                </button>
 
                 <div
                   ref={scrollRef}
@@ -2542,17 +2546,19 @@ export function HitlReviewModal({
                   })}
                 </div>
 
-                {canScrollRight && (
-                  <button
-                    type="button"
-                    className={`${styles.scrollNavBtn} ${styles.scrollNavRight}`}
-                    onClick={() => handleScrollStep(160)}
-                    aria-label="오른쪽으로 스크롤"
-                    title="오른쪽으로 이동"
-                  >
-                    ›
-                  </button>
-                )}
+                <button
+                  type="button"
+                  className={`${styles.scrollNavBtn} ${styles.scrollNavRight} ${
+                    !canScrollRight ? styles.scrollNavHidden : ""
+                  }`}
+                  onClick={() => handleScrollStep(160)}
+                  aria-label="오른쪽으로 스크롤"
+                  title="오른쪽으로 이동"
+                  disabled={!canScrollRight}
+                  tabIndex={canScrollRight ? 0 : -1}
+                >
+                  ›
+                </button>
 
                 <button
                   type="button"

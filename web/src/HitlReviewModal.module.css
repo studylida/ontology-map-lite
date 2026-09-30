@@ -1326,6 +1326,12 @@
   transform: scale(0.95);
 }
 
+.scrollNavHidden {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
+}
+
 .compactCandidatePillsDragging {
   cursor: grabbing !important;
   scroll-behavior: auto !important;

@@ -38,6 +38,13 @@ export function KnowledgePopover({ onSelectNode }: KnowledgePopoverProps) {
 
       const text = selection.toString().trim();
 
+      // 모달(dialog) 내부에서 텍스트를 드래그한 경우 모달 UI 조작과의 간섭 방지
+      const anchorNode = selection.anchorNode;
+      const anchorEl = anchorNode instanceof HTMLElement ? anchorNode : anchorNode?.parentElement;
+      if (anchorEl?.closest('[role="dialog"]') || anchorEl?.closest('dialog')) {
+        return;
+      }
+
       // 2글자 미만이거나 30글자 초과 시 팝오버를 띄우지 않음
       if (text.length < 2 || text.length > 30) {
         return;
