@@ -156,13 +156,13 @@ export const nodeStyles: Record<LegacyTier, NodeStyle> = {
     colorScale: 0.75,
   },
   ambient: {
-    opacity: 0.72,
-    emission: 0.75,
+    opacity: 0.88,
+    emission: 1.05,
     haloOpacity: 0,
-    haloFactor: 2.2,
+    haloFactor: 2.5,
     shellOpacity: 0,
-    labelOpacity: 0.72, // 평상시에도 외곽 섬노드 이름을 선명하게 식별 가능 (호버 시 1.0)
-    colorScale: 0.85,
+    labelOpacity: 0.85, // 평상시에도 외곽 섬노드 이름을 선명하게 식별 가능 (호버 시 1.0)
+    colorScale: 0.95,
   },
 };
 
@@ -206,8 +206,13 @@ export function mapTier(
 
 export function radiusFor(node: RuntimeNode): number {
   const count = node.claimCount ?? 1;
-  const radius = count >= 6 ? 3.5 : count >= 3 ? 2.35 : 1.6;
-  return radius * 1.75;
+  // 기본 최소 반지름을 2.8에서 4.8로 약 1.7배 전반적 확대
+  let radius = count >= 6 ? 5.1 : count >= 3 ? 3.75 : 2.8;
+  radius *= 1.72; // 최소 4.81, 중간 6.45, 대형 8.77
+  if (node.tier === "center") {
+    radius *= 1.22; // 중심 노드는 더욱 웅장하고 선명하게 강조 (약 10.7)
+  }
+  return radius;
 }
 
 export function makeLabel(node: RuntimeNode): CSS2DObject {
@@ -235,25 +240,22 @@ export function applyNodeVisual(
   const hoverOpacity = visual.userData.hoverOpacity ?? 0;
   const effectiveReveal = Math.max(hoverOpacity, proximity);
 
-  const displayColor = isAmbient
-    ? new THREE.Color("#64748b").lerp(
-        entityColor,
-        Math.max(hoverOpacity, proximity * 0.85),
-      )
-    : entityColor;
+  // 앰비언트 노드도 원래의 고유 분류 색상(기업 보라, 시설 하늘, 사업 민트 등)을 선명하게 유지
+  const displayColor = entityColor;
 
   visual.userData.surface.material.color.set(0x000000);
   visual.userData.surface.material.emissive.copy(displayColor);
   visual.userData.surface.material.emissiveIntensity = isAmbient
-    ? 0.45 + effectiveReveal * 0.65
+    ? 0.92 + effectiveReveal * 0.35
     : style.emission;
   visual.userData.surface.material.opacity = isAmbient
-    ? 0.35 + effectiveReveal * 0.6
+    ? 0.82 + effectiveReveal * 0.18
     : style.opacity;
   visual.userData.surface.scale.setScalar(radius);
 
   visual.userData.occluder.scale.setScalar(radius * 1.05);
-  visual.userData.occluder.visible = visual.userData.surface.material.opacity > 0.05;
+  // 외곽 앰비언트 노드는 뒷면 occluder를 비활성화하여 광채가 검은 배경에 묻히지 않게 함
+  visual.userData.occluder.visible = !isAmbient && visual.userData.surface.material.opacity > 0.05;
 
   visual.userData.core.visible = false;
   visual.userData.halo.visible = false;
@@ -280,7 +282,8 @@ export function applyNodeVisual(
   } else {
     delete visual.userData.label.element.dataset.proximity;
   }
-  visual.userData.label.position.set(radius + 3.5, 0, 0);
+  // 커진 구체 크기에 맞춰 라벨 위치 이격
+  visual.userData.label.position.set(radius + 4.8, 0, 0);
 
   visual.userData.radius = radius;
   visual.userData.style = { ...style };

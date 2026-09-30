@@ -153,6 +153,17 @@ export function createHoverHighlightManager({
   setHoveredRelation,
 }: HoverHighlightOptions) {
   let hoverAnim: number | null = null;
+  let activeHoveredNodeId: string | null = null;
+  let lastNodeLeaveTime = 0;
+  let linkHoverTimer: any = null;
+  let currentHoveredLinkId: string | null = null;
+
+  const clearLinkTimer = () => {
+    if (linkHoverTimer !== null) {
+      clearTimeout(linkHoverTimer);
+      linkHoverTimer = null;
+    }
+  };
 
   const easeInOutCubic = (value: number): number =>
     value < 0.5 ? 4 * value * value * value : 1 - (-2 * value + 2) ** 3 / 2;
@@ -277,12 +288,49 @@ export function createHoverHighlightManager({
 
   const handleNodeHover = (node: RuntimeNode | null) => {
     container.style.cursor = node ? "pointer" : "grab";
-    highlightHover(node ? String(node.id) : null, null);
+    clearLinkTimer();
+
+    if (node) {
+      activeHoveredNodeId = String(node.id);
+      currentHoveredLinkId = null;
+      setHoveredRelation(null);
+      highlightHover(activeHoveredNodeId, null);
+    } else {
+      activeHoveredNodeId = null;
+      lastNodeLeaveTime = performance.now();
+      // 간선이 활성화되어 있지 않다면 즉시 하이라이트 해제
+      if (!currentHoveredLinkId) {
+        highlightHover(null, null);
+      }
+    }
   };
 
   const handleLinkHover = (link: RuntimeLink | null) => {
-    container.style.cursor = link ? "pointer" : "grab";
-    if (link) {
+    clearLinkTimer();
+
+    // 1) 노드가 현재 호버 중이거나, 노드에서 방금 벗어난 직후(100ms 이내)라면 간선 호버 무시 (노드 최우선 순위 보장)
+    if (activeHoveredNodeId !== null || performance.now() - lastNodeLeaveTime < 100) {
+      return;
+    }
+
+    if (!link) {
+      container.style.cursor = "grab";
+      currentHoveredLinkId = null;
+      setHoveredRelation(null);
+      if (!activeHoveredNodeId) {
+        highlightHover(null, null);
+      }
+      return;
+    }
+
+    // 2) 간선 진입 시 120ms 디바운스 대기 후 발동 (마우스가 빠르게 스쳐 지나갈 때 툴팁 점멸 차단)
+    linkHoverTimer = setTimeout(() => {
+      // 대기 도중 노드가 호버되었으면 취소
+      if (activeHoveredNodeId !== null) return;
+
+      container.style.cursor = "pointer";
+      currentHoveredLinkId = String(link.id);
+
       const sName =
         typeof link.source === "object"
           ? link.source.name
@@ -295,13 +343,12 @@ export function createHoverHighlightManager({
       setHoveredRelation(
         `${sName} ${dir} ${tName} · ${link.label ?? "연관"} · 근거 ${link.evidenceGroupCount}건`,
       );
-    } else {
-      setHoveredRelation(null);
-    }
-    highlightHover(null, link ? String(link.id) : null);
+      highlightHover(null, String(link.id));
+    }, 120);
   };
 
   const cleanup = () => {
+    clearLinkTimer();
     if (hoverAnim !== null) {
       cancelAnimationFrame(hoverAnim);
       hoverAnim = null;
