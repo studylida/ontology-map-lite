@@ -1,6 +1,6 @@
 // web/src/HitlReviewModal.tsx
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { commitAdapterInput, convertAdapterInput, seedDemoData } from "./api";
+import { commitAdapterInput, convertAdapterInput, searchNodes, seedDemoData } from "./api";
 import styles from "./HitlReviewModal.module.css";
 
 export interface HitlReviewModalProps {
@@ -391,15 +391,43 @@ export function HitlReviewModal({
     setCommitting(true);
     setError(null);
     try {
-      await commitAdapterInput({
+      const commitRes = await commitAdapterInput({
         bundle: bundleData,
         enabled_ids: Array.from(effectiveItemIds),
       });
 
+      // 포커싱할 대표 노드 ID 산출 (신규 노드 우선)
+      let targetNodeId: number | undefined = undefined;
+
+      // 1) 백엔드 응답에서 primary_node_id 추출
+      if (commitRes && Array.isArray(commitRes.results) && commitRes.results.length > 0) {
+        const firstRes = commitRes.results[0];
+        if (firstRes.primary_node_id) {
+          targetNodeId = firstRes.primary_node_id;
+        }
+      }
+
+      // 2) 생산자별 핵심 관심 노드로 정밀 보정
+      try {
+        if (producer === "news") {
+          const matched = await searchNodes("누리소재");
+          if (matched.length > 0) targetNodeId = matched[0].id;
+        } else if (producer === "gov") {
+          const matched = await searchNodes("실증지원");
+          if (matched.length > 0) targetNodeId = matched[0].id;
+        } else if (producer === "excel") {
+          const matched = await searchNodes("한결정밀");
+          if (matched.length > 0) targetNodeId = matched[0].id;
+        }
+      } catch (searchErr) {
+        console.warn("대표 노드 검색 실패, 기본 primary_node_id 유지:", searchErr);
+      }
+
       setToastMessage("지식그래프에 성공적으로 반영되었습니다!");
       setTimeout(() => {
         setToastMessage(null);
-        onIngestionSuccess?.();
+        setCommitting(false);
+        onIngestionSuccess?.(targetNodeId);
         onClose();
       }, 700);
     } catch (err: any) {
@@ -2651,7 +2679,7 @@ export function HitlReviewModal({
             type="button"
             className={styles.primaryBtn}
             onClick={handleCommit}
-            disabled={committing || enabledItemIds.size === 0}
+            disabled={committing || effectiveItemIds.size === 0}
           >
             {committing ? "지식맵에 반영 중..." : "선택한 변경 반영 및 저장"}
           </button>

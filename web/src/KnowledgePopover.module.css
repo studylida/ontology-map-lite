@@ -1,14 +1,15 @@
 /* web/src/KnowledgePopover.module.css */
 .popover {
   position: fixed;
-  z-index: 100;
-  width: 300px;
-  background: rgba(18, 24, 38, 0.95);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(56, 189, 248, 0.25);
+  z-index: 1000;
+  width: 380px;
+  max-height: 360px;
+  background: rgba(15, 23, 42, 0.96);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(56, 189, 248, 0.35);
   box-shadow:
-    0 12px 30px rgba(0, 0, 0, 0.6),
-    0 0 15px rgba(56, 189, 248, 0.15);
+    0 16px 36px rgba(0, 0, 0, 0.65),
+    0 0 20px rgba(56, 189, 248, 0.18);
   border-radius: 12px;
   padding: 12px 14px;
   color: #f1f5f9;
@@ -40,36 +41,49 @@
 .queryBadge {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 11px;
+  gap: 8px;
+  font-size: 12px;
   font-weight: 600;
   color: #38bdf8;
-  max-width: 230px;
+  max-width: 320px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.countBadge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: rgba(56, 189, 248, 0.2);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.4);
 }
 
 .closeBtn {
   background: transparent;
   border: none;
   color: #64748b;
-  font-size: 12px;
+  font-size: 13px;
   cursor: pointer;
-  padding: 2px 4px;
+  padding: 2px 6px;
   border-radius: 4px;
-  transition: color 0.15s;
+  transition: all 0.15s;
 }
 
 .closeBtn:hover {
   color: #f1f5f9;
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .resultsList {
   list-style: none;
   margin: 0;
   padding: 0;
-  max-height: 200px;
+  max-height: 250px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -77,55 +91,58 @@
 }
 
 .resultsList::-webkit-scrollbar {
-  width: 4px;
+  width: 5px;
 }
 .resultsList::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.2);
   border-radius: 4px;
 }
 
 .resultItem {
-  padding: 8px 10px;
+  padding: 9px 12px;
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.03);
-  border: 1px solid transparent;
+  border: 1px solid rgba(255, 255, 255, 0.04);
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .resultItem:hover {
-  background: rgba(56, 189, 248, 0.1);
-  border-color: rgba(56, 189, 248, 0.3);
-  transform: translateX(2px);
+  background: rgba(56, 189, 248, 0.12);
+  border-color: rgba(56, 189, 248, 0.4);
+  transform: translateX(3px);
 }
 
 .itemHeader {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 3px;
+  gap: 8px;
+  margin-bottom: 4px;
 }
 
 .badge {
   font-size: 10px;
-  font-weight: 600;
-  padding: 1px 5px;
+  font-weight: 700;
+  padding: 2px 6px;
   border-radius: 4px;
-  background: rgba(56, 189, 248, 0.2);
+  background: rgba(56, 189, 248, 0.22);
   color: #38bdf8;
+  white-space: nowrap;
 }
 
 .nodeName {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   color: #fff;
+  letter-spacing: -0.2px;
 }
 
 .nodeDesc {
-  font-size: 11px;
+  font-size: 11.5px;
+  line-height: 1.45;
   color: #94a3b8;
   display: -webkit-box;
-  -webkit-line-clamp: 1;
+  -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }

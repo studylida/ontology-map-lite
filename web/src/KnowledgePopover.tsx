@@ -65,24 +65,26 @@ export function KnowledgePopover({ onSelectNode }: KnowledgePopoverProps) {
 
         const rect = selection.getRangeAt(0).getBoundingClientRect();
 
-        // ⭐ 블로그의 화면 경계 보정 (Collision Detection) 계산식
-        const popoverWidth = 300;
-        const popoverHeight = 180;
+        // 스마트 뷰포트 배치 (Collision Detection & Smart Flipping)
+        const popoverWidth = 380;
+        const estimatedHeight = 320;
+        const margin = 20;
 
-        // 가로: 선택 영역 중앙에 맞추되 좌우 경계를 벗어나지 않도록 방어
+        // 가로: 선택 영역 중앙에 맞추되 좌우 여백(20px) 내로 안전하게 클램핑
         let left = rect.left + rect.width / 2 - popoverWidth / 2;
         left = Math.max(
-          16,
-          Math.min(window.innerWidth - popoverWidth - 16, left),
+          margin,
+          Math.min(window.innerWidth - popoverWidth - margin, left),
         );
 
-        // 세로: 기본은 아래쪽(+8px), 아래 공간이 모자라면 위쪽으로 배치
-        let top = rect.bottom + 8;
-        if (
-          top + popoverHeight > window.innerHeight &&
-          rect.top > popoverHeight + 16
-        ) {
-          top = rect.top - popoverHeight - 8;
+        // 세로: 기본은 선택 영역 아래(+10px), 아래 공간 부족 시 상단 플립
+        let top = rect.bottom + 10;
+        if (top + estimatedHeight > window.innerHeight - margin) {
+          if (rect.top - estimatedHeight - 10 >= margin) {
+            top = rect.top - estimatedHeight - 10;
+          } else {
+            top = Math.max(margin, window.innerHeight - estimatedHeight - margin);
+          }
         }
 
         setSelectedText(text);
@@ -131,6 +133,7 @@ export function KnowledgePopover({ onSelectNode }: KnowledgePopoverProps) {
         <div className={styles.queryBadge}>
           <span>🔗</span>
           <span>'{selectedText}' 연관 지식</span>
+          <span className={styles.countBadge}>{results.length}건</span>
         </div>
         <button
           type="button"

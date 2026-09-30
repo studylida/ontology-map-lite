@@ -107,7 +107,11 @@ export function App() {
 
         const center =
           res.nodes.find((n) => n.id === nodeId) ?? res.nodes[0] ?? null;
-        setSelectedNode(center);
+        if (center) {
+          setSelectedNode({ ...center });
+        } else {
+          setSelectedNode(null);
+        }
       } catch {
         setError(
           "지식맵을 불러오지 못했습니다. 서버 연결 상태를 확인한 뒤 다시 시도해 주세요.",
@@ -210,13 +214,16 @@ export function App() {
     }
   };
 
-  // HITL 검토 후 지식그래프 적재 성공 시 (M4.4: 중심 ID가 같아도 graph와 details를 항상 재조회)
-  const handleIngestionSuccess = (newNodeId?: number) => {
+  // HITL 검토 후 지식그래프 적재 성공 시 (M4.4: 중심 ID가 같아도 graph와 details를 항상 재조회 & 신규 노드 Fly-to + 사이드패널 오픈)
+  const handleIngestionSuccess = async (newNodeId?: number) => {
     const targetId = newNodeId && newNodeId > 0 ? newNodeId : centerNodeId;
-    setCenterNodeId(targetId);
-    loadGraph(targetId, false);
-    if (selectedNode && selectedNode.id === targetId) {
-      setSelectedNode({ ...selectedNode });
+    if (targetId) {
+      setCenterNodeId(targetId);
+      await loadGraph(targetId, false);
+      // Three.js 카메라 부드러운 포커싱 & 재배치
+      setTimeout(() => {
+        canvasRef.current?.recenter();
+      }, 150);
     }
   };
 
