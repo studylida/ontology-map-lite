@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>Ontology Map Lite - 지도 UI 아키텍처 다이어그램</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background-color: #0f172a;
+      color: #f1f5f9;
+      margin: 0;
+      padding: 32px;
+      line-height: 1.6;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    h1 {
+      color: #38bdf8;
+      border-bottom: 2px solid #1e293b;
+      padding-bottom: 12px;
+      margin-bottom: 24px;
+    }
+    h2 {
+      color: #7dd3fc;
+      margin-top: 36px;
+      margin-bottom: 16px;
+    }
+    .card {
+      background-color: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 32px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+      overflow-x: auto;
+    }
+    .desc {
+      color: #94a3b8;
+      font-size: 14px;
+      margin-bottom: 16px;
+    }
+    .mermaid {
+      display: flex;
+      justify-content: center;
+      background-color: #0b1120;
+      border-radius: 8px;
+      padding: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🗺️ Ontology Map Lite — 지도 UI 다이어그램</h1>
+
+    <h2>1. 컴포넌트 및 모듈 계층 구조</h2>
+    <div class="card">
+      <div class="desc">App.tsx에서 3D WebGL 캔버스(GraphCanvas), 오버레이 HUD, 그리고 좌표/스타일 연산 모듈 간의 연결 구조입니다.</div>
+      <div class="mermaid">
+flowchart TD
+    subgraph Root["상위 컨트롤러"]
+        App["App.tsx<br/>(상태 관리 & API 연동)"]
+    end
+
+    subgraph Overlay["오버레이 & HUD UI"]
+        NodeSearch["NodeSearch.tsx<br/>(노드 검색 & 점프)"]
+        SidePanel["SidePanel.tsx<br/>(노드 상세 & AI 인사이트)"]
+        KnowledgePopover["KnowledgePopover.tsx<br/>(관계/근거 팝오버)"]
+        HUD["HUD 컨트롤<br/>(확대/축소/화면맞춤/재배치)"]
+    end
+
+    subgraph CoreCanvas["지도 렌더링 코어"]
+        GraphCanvas["GraphCanvas.tsx<br/>(3D Canvas & Three.js 씬)"]
+        ForceGraph3D["3d-force-graph / Three.js<br/>(WebGL 렌더러 & OrbitControls)"]
+    end
+
+    subgraph Subsystems["시각화 & 연산 엔진"]
+        graphLayout["graphLayout.ts<br/>(방사형 티어 레이아웃 & 노드 배치)"]
+        graphVisuals["graphVisuals.ts<br/>(메시/재질/글로우/스타일링)"]
+        previewMotion["previewLabels.ts / previewMotion.ts<br/>(2D 라벨 배치 및 모션)"]
+    end
+
+    subgraph Interactions["상호작용 & 연출 훅"]
+        introAnim["useGraphIntroAnimation.ts<br/>(카메라 인트로 시네마틱)"]
+        pointerInter["useGraphPointerInteraction.ts<br/>(레이캐스팅 & 호버 하이라이트)"]
+        periPan["peripheralPan.ts<br/>(화면 외곽 마우스 팬 감지)"]
+    end
+
+    App --> GraphCanvas
+    App --> NodeSearch
+    App --> SidePanel
+    App --> KnowledgePopover
+    GraphCanvas --> ForceGraph3D
+    GraphCanvas --> HUD
+
+    GraphCanvas --> graphLayout
+    GraphCanvas --> graphVisuals
+    GraphCanvas --> previewMotion
+    GraphCanvas --> introAnim
+    GraphCanvas --> pointerInter
+    GraphCanvas --> periPan
+
+    NodeSearch -.->|"노드 선택"| App
+    GraphCanvas -.->|"onNodeClick (선택 변경)"| App
+    App -.->|"selectedNode 전달"| SidePanel
+      </div>
+    </div>
+
+    <h2>2. 사용자 상호작용 및 서브그래프 로딩 시퀀스</h2>
+    <div class="card">
+      <div class="desc">노드 호버 및 클릭 시 인접 하이라이트와 1~2 hop 즉각 로딩 및 4-hop 백그라운드 확장 흐름입니다.</div>
+      <div class="mermaid">
+sequenceDiagram
+    autonumber
+    actor User as 사용자
+    participant Canvas as GraphCanvas.tsx
+    participant Pointer as useGraphPointerInteraction
+    participant App as App.tsx
+    participant API as api.ts (Backend)
+    participant Side as SidePanel.tsx
+
+    User->>Canvas: 노드 마우스 오버(Hover)
+    Canvas->>Pointer: Raycaster 감지
+    Pointer-->>Canvas: 인접 노드/엣지 하이라이트 & Ambient 처리
+
+    User->>Canvas: 노드 클릭(Click)
+    Canvas->>App: onNodeClick(node)
+    App->>Side: setSelectedNode(node) (사이드패널 오픈)
+    App->>API: fetchSubgraph(nodeId, 1~2 hop)
+    API-->>App: 1~2차 관계 데이터 반환 (초고속 응답)
+    App->>Canvas: nodes / edges 상태 갱신 (점진적 병합)
+
+    opt 4-hop 이상 추가 데이터 존재 시
+        App->>API: fetchSubgraph(nodeId, unbounded=true)
+        API-->>App: 백그라운드 확장 데이터 반환
+        App->>Canvas: 무자극(Ambient) 노드 병합
+    end
+      </div>
+    </div>
+  </div>
+
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'dark',
+      themeVariables: {
+        darkMode: true,
+        background: '#0b1120',
+        primaryColor: '#0284c7',
+        primaryTextColor: '#f8fafc',
+        primaryBorderColor: '#38bdf8',
+        lineColor: '#94a3b8',
+        secondaryColor: '#1e293b',
+        tertiaryColor: '#0f172a'
+      }
+    });
+  </script>
+</body>
+</html>
